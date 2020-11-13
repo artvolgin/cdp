@@ -101,6 +101,13 @@ selected_questions = list(map(lambda x: x[1:], selected_questions))
 df_cities_19 = df_cities_19[df_cities_19['Question Number'].apply(
     lambda q: q in selected_questions)]
 
+# Remove rows with NA's
+df_cities_19 = df_cities_19[df_cities_19['Response Answer'].notna()]
+# Unify "Other" category
+df_cities_19['Response Answer'] = df_cities_19['Response Answer'].apply(
+    lambda x: "Other" if x.startswith("Other") else x)
+
+
 # Function for preprocessing of large table questions
 
 def preprocessTableQuestion(df, question_number):
@@ -167,9 +174,8 @@ df_c2_2 = preprocessTableQuestion(df_cities_19, "2.2")
 df_c3_0 = preprocessTableQuestion(df_cities_19, "3.0")
 df_c5_0a = preprocessTableQuestion(df_cities_19, "5.0a")
 df_c6_0 = preprocessTableQuestion(df_cities_19, "6.0")
-
-# TODO: Clever way to deal with missings and "Other: ..."
 # TODO: Combine Hazards based on the common cause
+
 
 ### --- C2.1
 # Climate Hazards
@@ -187,13 +193,87 @@ temp = df_c2_1['Social impact of hazard overall']
 temp = temp[temp.notna()]
 pd.Series(np.concatenate(temp.values)).value_counts()
 
+### Importance of the Hazard
+# 1. Probability
+df_c2_1['Current probability of hazard'].value_counts()
+df_c2_1['hazard_probability'] = df_c2_1['Current probability of hazard'].replace(
+    {"High":10,
+     "Medium High":8,
+     "Medium":6,
+     "Medium Low":4,
+     "Low":2,
+     "Does not currently impact the city":0,
+     "Do not know":np.nan})
+# 2. Consequences
+df_c2_1['Current consequence of hazard'].value_counts()
+df_c2_1['hazard_consequence'] = df_c2_1['Current consequence of hazard'].replace(
+    {"High":10,
+     "Medium High":8,
+     "Medium":6,
+     "Medium Low":4,
+     "Low":2,
+     "Does not currently impact the city":0,
+     "Do not know":np.nan})
+# 3. Previous impact
+df_c2_1['Did this hazard significantly impact your city before 2019?'].value_counts()
+df_c2_1['hazard_previous_impact'] = df_c2_1['Did this hazard significantly impact your city before 2019?'].replace(
+    {"Yes":10,
+     "No":0,
+     "Do not know":np.nan})
+# 4. Future change in frequency
+df_c2_1['Future change in frequency'].value_counts()
+df_c2_1['hazard_future_frequency'] = df_c2_1['Future change in frequency'].replace(
+    {"Increasing":10,
+     "Decreasing":5,
+     "Not expected to happen in the future":0,
+     "None":0,
+     "Do not know":np.nan})
+# 5. Future change in intensity
+df_c2_1['Future change in intensity'].value_counts()
+df_c2_1['hazard_future_intensity'] = df_c2_1['Future change in intensity'].replace(
+    {"Increasing":10,
+     "Decreasing":5,
+     "Not expected to happen in the future":0,
+     "None":0,
+     "Do not know":np.nan})
+# 6. Future impact
+df_c2_1['Magnitude of expected future impact'].value_counts()
+df_c2_1['hazard_future_impact'] = df_c2_1['Magnitude of expected future impact'].replace(
+    {"High":10,
+     "Medium":5,
+     "Low":0,
+     "Do not know":np.nan})
+# 7. Term
+df_c2_1['When do you first expect to experience those changes?'].value_counts()
+df_c2_1['hazard_term'] = df_c2_1['When do you first expect to experience those changes?'].replace(
+    {"Immediately":10,
+     "Short-term (by 2025)":5,
+     "Medium-term (2026-2050)":0,
+     "Long-term (after 2050)":np.nan})
+# Calculate Importance of the Hazard
+hazard_columns = df_c2_1.columns[list(map(lambda x: x.startswith('hazard_'), df_c2_1.columns))]
+hazard_means = df_c2_1.groupby('Climate Hazards')[hazard_columns].mean()
+hazard_means['hazard_importance'] = hazard_means.sum(1)
+hazard_means.reset_index(inplace=True)
+
+# temp = df_c2_1.iloc[:,list(map(lambda x: x.startswith('hazard_'), df_c2_1.columns))]
+# temp = df_c2_1.loc[:,['hazard_probability', 'hazard_consequence',
+#                      'hazard_future_frequency', 'hazard_future_intensity']]
+# temp.isna().sum(0)
+# temp['NAs'] = temp.isna().sum(1)
+# temp['NAs'].value_counts()
+
+
+### Climate Hazards ~~~ Vunerable Populations
+df_c2_1['Please identify which vulnerable populations are affected'].isna().sum()
+df_harards_populations = pd.get_dummies(df_c2_1['Please identify which vulnerable populations are affected'].apply(pd.Series).stack()).sum(level=0)
+
+
 # TODO: Association rules mining with Apriori
 
 ### --- C2.2 
 # Factors that affect your city's ability to adapt to climate change
 df_c2_2 = df_c2_2[df_c2_2['Factors that affect ability to adapt'].notna()]
-df_c2_2['Factors that affect ability to adapt'] = df_c2_2['Factors that affect ability to adapt'].apply(
-    lambda x: "Other" if x.startswith("Other") else x)
 # Filtering
 df_c2_2 = df_c2_2[df_c2_2['Support / Challenge'] != 'Do not know']
 temp = df_c2_2['Factors that affect ability to adapt'].value_counts()
@@ -204,15 +284,13 @@ df_c2_2['Factors that affect ability to adapt'].value_counts()
 # Cross
 cross_c2_2 = pd.crosstab(df_c2_2['Factors that affect ability to adapt'],
                          df_c2_2['Support / Challenge'], normalize="index")
-
 # TODO: NLP to extract words which are helpfull to distinguishing between
 # Support and Challenge, TF-IDF + LogReg
+
 
 ### --- C3.0
 # Actions against climate change
 df_c3_0 = df_c3_0[df_c3_0['Action'].notna()]
-df_c3_0['Action'] = df_c3_0['Action'].apply(
-    lambda x: "Other" if x.startswith("Other") else x)
 df_c3_0['Action'].value_counts() # "No action currently taken" category
 # Co-benifit areas
 temp = df_c3_0['Co-benefit area']
@@ -233,13 +311,13 @@ cross_hazards_actions = cross_hazards_actions.loc[:,cross_hazards_actions.sum(0)
 # TODO: Diversity of actions for the hazard
 cross_hazards_actions_bool = cross_hazards_actions > 10
 cross_hazards_actions_bool.sum(1)
-
-# TODO: Two-mode network Hazards ~ Actions
+# TODO: Two-mode network: Hazards ~ Actions
 
 ### --- C5.0a
 # TODO
 
 ### --- C6.0
+# TODO
 
 # =============================================================================
 # 3. Cities - 2019: KPI
