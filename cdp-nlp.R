@@ -26,6 +26,7 @@ require(lubridate)
 library(pdftools)
 library(tm)
 library(cld3)
+library(stm)
 # Other
 library(arules)
 library(arulesViz)
@@ -69,97 +70,6 @@ Encoding(temp_vec) <- "UTF-8"
 df_cities.19$colname <- temp_vec
 # Recode 'Other' category
 df_cities.19$resp[grepl("^Other:", as.character(df_cities.19$resp))] <- "Other"
-
-
-#############################################################################################################
-############## 1. Network of Cities
-#############################################################################################################
-
-
-### --- Q3.3, 2020
-
-# Load the question and specific column
-df_q3_3 <- df_cities.20 %>% filter(qstn == "3.3")
-length(unique(df_q3_3$org))
-# Select one column
-df_q3_3.init <- df_q3_3 %>%
-  filter(colname == "Select the initiatives related to this adaptation goal that your city has committed to")
-length(unique(df_q3_3.init$org))
-
-# Remove non-substantive answers
-remove_resp <- c("", "Individual City Commitment", "Declaring Climate Emergency",
-                 "Other", "This target does not contribute towards an initiative commitment")
-df_q3_3.init <- df_q3_3.init %>% filter(!(resp %in% remove_resp))
-df_q3_3.init <- df_q3_3.init %>% distinct(id,resp, .keep_all= TRUE)
-t <- as.data.frame(table(df_q3_3.init$resp))
-
-# Mean number of aggrements per city
-nrow(df_q3_3.init) / length(unique(df_q3_3.init$id))
-
-# Transform to network
-g <- graph_from_edgelist(as.matrix(df_q3_3.init %>% dplyr::select(org, resp)))
-V(g)$type <- bipartite_mapping(g)$type
-V(g)$color <- ifelse(V(g)$type, "lightblue", "salmon")
-V(g)$shape <- ifelse(V(g)$type, "square", "circle")
-E(g)$color <- "lightgray"
-plot(g,
-     vertex.label.cex = 0.5,
-     vertex.label=NA,
-     vertex.label.color = "black",
-     vertex.size=3,
-     edge.arrow.size=0.1)
-
-# Transform to one-mode network
-bipartite_matrix  <- as_incidence_matrix(g)
-city_matrix <- bipartite_matrix %*% t(bipartite_matrix)
-diag(city_matrix) <- 0
-g.city <- graph_from_adjacency_matrix(city_matrix)
-plot(g.city,
-     vertex.label.cex = 0.5,
-     vertex.label=NA,
-     vertex.label.color = "black",
-     vertex.size=3,
-     edge.arrow.size=0.1)
-
-
-### --- Q1.1a, 2019
-
-df_q1_1a <- df_cities.19 %>%
-  filter(qstn=="1.1a", colname=="Name of commitment and attach document")
-# Remove non-substantive answers
-remove_resp <- c("", "Individual city commitment", "Other")
-df_q1_1a <- df_q1_1a %>% filter(!(resp %in% remove_resp))
-df_q1_1a <- df_q1_1a %>% distinct(id,resp, .keep_all= TRUE)
-sum(df_q1_1a$resp == "Global Covenant of Mayors for Climate & Energy") / length(unique(df_q1_1a$id))
-nrow(df_q1_1a) / length(unique(df_q1_1a$id))
-t <- as.data.frame(table(df_q1_1a$resp))
-
-# Transform to network
-g <- graph_from_edgelist(as.matrix(df_q1_1a %>% dplyr::select(org, resp)))
-V(g)$type <- bipartite_mapping(g)$type
-V(g)$color <- ifelse(V(g)$type, "lightblue", "salmon")
-V(g)$shape <- ifelse(V(g)$type, "square", "circle")
-E(g)$color <- "lightgray"
-plot(g,
-     vertex.label.cex = 0.5,
-     vertex.label=NA,
-     vertex.label.color = "black",
-     vertex.size=3,
-     edge.arrow.size=0.1)
-
-#  https://rpubs.com/pjmurphy/317838
-
-# Transform to one-mode network
-bipartite_matrix  <- as_incidence_matrix(g)
-city_matrix <- bipartite_matrix %*% t(bipartite_matrix)
-diag(city_matrix) <- 0
-g.city <- graph_from_adjacency_matrix(city_matrix)
-g.city <- as.undirected(g.city)
-plot(g.city,
-     vertex.label.cex = 0.5,
-     vertex.label=NA,
-     vertex.label.color = "black",
-     vertex.size=3)
 
 
 
@@ -265,7 +175,7 @@ head(sort(beta, decreasing = T), 10)
 head(sort(beta, decreasing = F), 10)
 
 #############################################################################################################
-############## Q2.0b, Q3.0, Q5.5a : NLP, Try to download .pdf 
+############## Q2.0b, Q3.0, Q5.5a : NLP, 2020
 #############################################################################################################
 
 # TODO:
@@ -295,7 +205,7 @@ df_q2_0b.link.long <- melt(df_q2_0b.link, id.vars=c("id")) %>%
   slice(-416) # Remove city with a large book as a report
 
 ### Download reports
-setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/q2_0b")
+setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/2020/q2_0b")
 oldw <- getOption("warn")
 options(warn = -1)
 for (i in (1:nrow(df_q2_0b.link.long))) {
@@ -309,7 +219,7 @@ for (i in (1:nrow(df_q2_0b.link.long))) {
 options(warn = oldw)
 
 ### Load the data from separate pdfs
-setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/q2_0b")
+setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/2020/q2_0b")
 pdf_files <- list.files(pattern = "pdf$")
 oldw <- getOption("warn")
 options(warn = -1)
@@ -332,17 +242,17 @@ df_texts$id_link_num <- substr(pdf_files, 1, (nchar(pdf_files)-4))
 # TODO: Translate non-english reports
 df_texts$lang <- detect_language(df_texts$text)
 df_texts.en <- df_texts %>% filter(lang=="en") %>% dplyr::select(-c(lang))
+# df_texts.nonen <- df_texts %>% filter(lang!="en")
 
-## TODO
+# TO LONL
 df_texts.en <- df_texts.en %>% separate(text, paste0("page", as.character(1:500)), sep="---PAGE-BREAK---")
-
 # Transform to long-format: id-link as observation
 df_texts.en.long <- melt(df_texts.en, id.vars=c("id_link_num")) %>%
   filter(!is.na(value)) %>% rename(page=variable, text=value) %>%
   mutate(page=as.character(page),
          page=substr(page, 5, nchar(page)),
-         text=tolower(text),
-         id=substr(id_link_num, 1, (nchar(id_link_num)-2))) # CHANGE FOR NER <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+         # text=tolower(text), # CHANGE FOR NER <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+         id=substr(id_link_num, 1, (nchar(id_link_num)-2))) 
 
 ### NLP part
 # Initilize spacy model
@@ -350,9 +260,13 @@ cnlp_init_spacy("en_core_web_sm")
 
 # Annotate the text
 annotation <- cnlp_annotate(input = df_texts.en.long, verbose = 10)
+# Add City ID
+df_temp <- annotation$token
+df_temp <- df_temp %>% left_join(annotation$document %>% dplyr::select(id, doc_id))
+annotation$token <- df_temp
 
 # Remove stopwords and non-alphabetical tokens
-stopwords_vec <- stopwords(language = "en",source = "smart")
+stopwords_vec <- stopwords::stopwords(language = "en",source = "smart")
 stopwords_vec <- c(stopwords_vec, "e.g.", "la")
 df_text_preprocessing <- annotation$token %>%
   filter(!(lemma %in% stopwords_vec),
@@ -362,40 +276,332 @@ df_text_preprocessing <- annotation$token %>%
   group_by(id) %>%
   summarise_at(vars(lemma), funs(paste(., collapse = ' ')))
 
+# Create Corpus and Document term matrix
+corpus_q2_0b <- corpus(df_text_preprocessing$lemma,
+                       docvars=df_text_preprocessing %>% dplyr::select(-c(lemma)))
+dfm_q2_0b <- tokens(corpus_q2_0b) %>%
+  tokens_ngrams(n = c(1)) %>%
+  dfm() %>%
+  dfm_trim(min_termfreq = 10)
+
+### 1. STM 
+stm_model <- stm(documents = dfm_q2_0b,
+                 K = 5, max.em.its = 75, init.type = "Spectral")
+labelTopics(stm_model)
+plot(stm_model, type = "summary")
+
+### 2. Correspondense analysis, Documents position
+tmod_ca <- textmodel_ca(dfm_q2_0b)
+textplot_scale1d(tmod_ca)
+dat_ca <- data.frame(dim1 = coef(tmod_ca, doc_dim = 1)$coef_document, 
+                     dim2 = coef(tmod_ca, doc_dim = 2)$coef_document)
+head(dat_ca)
+plot(1, xlim = c(-2, 2), ylim = c(-2, 2), type = "n", xlab = "Dimension 1", ylab = "Dimension 2")
+grid()
+text(dat_ca$dim1, dat_ca$dim2, labels = rownames(dat_ca), cex = 0.8, col = rgb(0, 0, 0, 0.7))
+
+# 3. LDA, Topics
+tmod_lda <- textmodel_lda(dfm_q2_0b, k = 10)
+terms(tmod_lda, 10)
 
 
+### --------- Q3.0 
 
-
-
-### --------- Q3.0
-
+### NEW
 df_q3_0 <- df_cities.20 %>% filter(qstn == "3.0")
 df_q3_0.link <- df_q3_0 %>%
-  filter(colname == "Web link")
-df_q3_0.link <- df_q3_0.link[endsWith(df_q3_0.link$resp, ".pdf"),]
-df_q3_0.link <- df_q3_0.link %>% distinct(resp) %>%
-  filter(!is.na(resp))
-# Download reports in .pdf
-setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports")
+  filter(colname == "Web link",
+         !(resp %in% c("Question not applicable", ""))) %>%
+  dplyr::select(id, resp)
+# Extract the links
+temp_vec <- sapply(df_q3_0.link$resp, function(x) str_extract_all(x, "(?<=^|\\s)http[^\\s]+"))
+temp_vec <- as.data.frame(sapply(temp_vec, function(x) paste(x, collapse = ' ')))
+df_q3_0.link$resp <- temp_vec[,1]
+df_q3_0.link <- df_q3_0.link %>% filter(resp!="")
+df_q3_0.link <- df_q3_0.link %>% separate(resp, paste0("link", as.character(1:9)),
+                                            sep=" ")
+df_q3_0.link <- df_q3_0.link[,colSums(is.na(df_q3_0.link)) != nrow(df_q3_0.link)]
+# Transform to long-format: id-link as observation
+df_q3_0.link.long <- melt(df_q3_0.link, id.vars=c("id")) %>%
+  filter(!is.na(value)) %>% rename(link_num=variable, link=value) %>%
+  mutate(link_num=substr(link_num, 5,5),
+         id_link_num=paste(id, link_num, sep="_"))
+
+### Download reports
+setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/2020/q3_0")
 oldw <- getOption("warn")
 options(warn = -1)
-for (url in df_q3_0.link$resp) {
-  tryCatch(download.file(url, destfile = basename(url), mode = "wb", quiet = T), 
-           error = function(e) print(paste(url, 'did not work out')))
-  print(url)
+for (i in (1:nrow(df_q3_0.link.long))) {
+  tryCatch(download.file(df_q3_0.link.long$link[i],
+                         destfile = paste0(df_q3_0.link.long$id_link_num[i], ".pdf"),
+                         mode = "wb", quiet = T), 
+           error = function(e) print(paste(as.character(i), ' error ~~~~~')))
+  print(i)
+  Sys.sleep(0.5)
 }
 options(warn = oldw)
 
+### Load the data from separate pdfs
+setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/2020/q3_0")
+pdf_files <- list.files(pattern = "pdf$")
+oldw <- getOption("warn")
+options(warn = -1)
+pdf_texts <- list()
+# i_vec <- c()
+for (i in (1:length(pdf_files))) {
+  tryCatch(pdf_texts[[i]] <- pdf_text(pdf_files[i]), 
+           # error = function(e) print(paste(as.character(i), ' error ~~~~~')))
+           error = function(e) pdf_texts[[i]] <- NULL)
+  print(i)
+  # i_vec <- c(i_vec, i)
+}
+# pdf_files <- pdf_files[!unlist(lapply(pdf_texts, is.null))] TODO: FIX THE BUG
+pdf_texts <- pdf_texts[!unlist(lapply(pdf_texts, is.null))]
+
+
+df_texts <- as.data.frame(sapply(pdf_texts, function(x) paste(x, collapse = '---PAGE-BREAK---')))
+colnames(df_texts) <- "text"
+
+df_texts$id <- as.character(1:nrow(df_texts)) # TODO: FIX THE BUG
+
+# Select only reports that are written in English
+# TODO: Translate non-english reports
+df_texts$lang <- detect_language(df_texts$text)
+df_texts.en <- df_texts %>% filter(lang=="en") %>% dplyr::select(-c(lang))
+# df_texts.nonen <- df_texts %>% filter(lang!="en")
+
+# TO LONLG
+df_texts.en <- df_texts.en %>% separate(text, paste0("page", as.character(1:500)), sep="---PAGE-BREAK---")
+# Transform to long-format: id-page as observation
+df_texts.en.long <- melt(df_texts.en, id.vars=c("id")) %>%
+  filter(!is.na(value)) %>% rename(page=variable, text=value) %>%
+  mutate(page=as.character(page),
+         page=substr(page, 5, nchar(page)))
+
+# TODO: FIX LATER
+# REMOVE LONG PAGE
+df_texts.en.long$len <- unlist(lapply(df_texts.en.long$text, nchar))
+df_texts.en.long <- df_texts.en.long %>% filter(len<1e6)
+
+### NLP part
+# Initilize spacy model
+cnlp_init_spacy("en_core_web_sm")
+
+# Annotate the text
+annotation <- cnlp_annotate(input = df_texts.en.long, verbose = 10)
+# Add City ID
+df_temp <- annotation$token
+df_temp <- df_temp %>% left_join(annotation$document %>% dplyr::select(id, doc_id))
+annotation$token <- df_temp
+
+# Remove stopwords and non-alphabetical tokens
+stopwords_vec <- stopwords::stopwords(language = "en",source = "smart")
+stopwords_vec <- c(stopwords_vec, "e.g.", "la")
+df_text_preprocessing <- annotation$token %>%
+  filter(!(lemma %in% stopwords_vec),
+         !(upos %in% c("DET", "PUNCT")),
+         (grepl("^[A-Za-z]+$", lemma, perl = T))) %>%
+  dplyr::select(id, lemma) %>%
+  group_by(id) %>%
+  summarise_at(vars(lemma), funs(paste(., collapse = ' ')))
+
+# Create Corpus and Document term matrix
+corpus_q3_0 <- corpus(df_text_preprocessing$lemma,
+                       docvars=df_text_preprocessing %>% dplyr::select(-c(lemma)))
+dfm_q3_0 <- tokens(corpus_q3_0) %>%
+  tokens_ngrams(n = c(1)) %>%
+  dfm() %>%
+  dfm_trim(min_termfreq = 10)
+ncol(dfm_q3_0)
+
+### 1. STM 
+stm_model <- stm(documents = dfm_q3_0,
+                 K = 5, max.em.its = 75, init.type = "Spectral")
+labelTopics(stm_model)
+plot(stm_model, type = "summary")
+
+### 2. Correspondense analysis, Documents position
+tmod_ca <- textmodel_ca(dfm_q2_0b)
+textplot_scale1d(tmod_ca)
+dat_ca <- data.frame(dim1 = coef(tmod_ca, doc_dim = 1)$coef_document, 
+                     dim2 = coef(tmod_ca, doc_dim = 2)$coef_document)
+head(dat_ca)
+plot(1, xlim = c(-2, 2), ylim = c(-2, 2), type = "n", xlab = "Dimension 1", ylab = "Dimension 2")
+grid()
+text(dat_ca$dim1, dat_ca$dim2, labels = rownames(dat_ca), cex = 0.8, col = rgb(0, 0, 0, 0.7))
+
+
 
 ### --------- Q5.5a
+# TODO
 
 df_q5_5a <- df_cities.20 %>% filter(qstn == "5.5a")
 df_q5_5a.link <- df_q5_5a %>%
-  filter(colname == "Web link")
-df_q5_5a.link <- df_q5_5a.link[endsWith(df_q5_5a.link$resp, ".pdf"),]
-df_q5_5a.link <- df_q5_5a.link %>% distinct(resp) %>%
-  filter(!is.na(resp))
+  filter(colname == "Web link",
+         !(resp %in% c("Question not applicable", ""))) %>%
+  dplyr::select(id, resp)
+# Extract the links
+temp_vec <- sapply(df_q5_5a.link$resp, function(x) str_extract_all(x, "(?<=^|\\s)http[^\\s]+"))
+temp_vec <- as.data.frame(sapply(temp_vec, function(x) paste(x, collapse = ' ')))
+df_q5_5a.link$resp <- temp_vec[,1]
+df_q5_5a.link <- df_q5_5a.link %>% filter(resp!="")
+df_q5_5a.link <- df_q5_5a.link %>% separate(resp, paste0("link", as.character(1:9)),
+                                          sep=" ")
+df_q5_5a.link <- df_q5_5a.link[,colSums(is.na(df_q5_5a.link)) != nrow(df_q5_5a.link)]
 
+
+
+#############################################################################################################
+############## Q2.0b, Q3.0, Q5.5a : NLP, 2019 
+#############################################################################################################
+
+# TODO:
+# 1. Look for .pdf files in the page, TOO COMLICATED
+# 2. Same questions in 2019 and 2018
+
+### --------- Q2.0b
+
+df_q2_0b <- df_cities.19 %>% filter(qstn == "2.0b")
+df_q2_0b.link <- df_q2_0b %>%
+  filter(colname == "Web link",
+         !(resp %in% c("Question not applicable", ""))) %>%
+  dplyr::select(id, resp)
+# Extract the links
+temp_vec <- sapply(df_q2_0b.link$resp, function(x) str_extract_all(x, "(?<=^|\\s)http[^\\s]+"))
+temp_vec <- as.data.frame(sapply(temp_vec, function(x) paste(x, collapse = ' ')))
+df_q2_0b.link$resp <- temp_vec[,1]
+df_q2_0b.link <- df_q2_0b.link %>% filter(resp!="")
+df_q2_0b.link <- df_q2_0b.link %>% separate(resp, paste0("link", as.character(1:9)),
+                                            sep=" ")
+df_q2_0b.link <- df_q2_0b.link[,colSums(is.na(df_q2_0b.link)) != nrow(df_q2_0b.link)]
+# Transform to long-format: id-link as observation
+df_q2_0b.link.long <- melt(df_q2_0b.link, id.vars=c("id")) %>%
+  filter(!is.na(value)) %>% rename(link_num=variable, link=value) %>%
+  mutate(link_num=substr(link_num, 5,5),
+         id_link_num=paste(id, link_num, sep="_"))
+
+### Download reports
+setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/2019/q2_0b")
+oldw <- getOption("warn")
+options(warn = -1)
+for (i in (1:nrow(df_q2_0b.link.long))) {
+  tryCatch(download.file(df_q2_0b.link.long$link[i],
+                         destfile = paste0(df_q2_0b.link.long$id_link_num[i], ".pdf"),
+                         mode = "wb", quiet = T), 
+           error = function(e) print(paste(as.character(i), ' error ~~~~~')))
+  print(i)
+  Sys.sleep(0.5)
+}
+options(warn = oldw)
+
+### Load the data from separate pdfs
+setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/2019/q2_0b")
+pdf_files <- list.files(pattern = "pdf$")
+oldw <- getOption("warn")
+options(warn = -1)
+pdf_texts <- list()
+for (i in (1:length(pdf_files))) {
+  tryCatch(pdf_texts[[i]] <- pdf_text(pdf_files[i]), 
+           error = function(e) print(paste(as.character(i), ' error ~~~~~')))
+  print(i)
+  # Sys.sleep(1)
+}
+pdf_files <- pdf_files[!unlist(lapply(pdf_texts, is.null))]
+pdf_texts <- pdf_texts[!unlist(lapply(pdf_texts, is.null))]
+
+df_texts <- as.data.frame(sapply(pdf_texts, function(x) paste(x, collapse = '---PAGE-BREAK---')))
+colnames(df_texts) <- "text"
+df_texts$id_link_num <- substr(pdf_files, 1, (nchar(pdf_files)-4))
+
+# Select only reports that are written in English
+# TODO: Translate non-english reports
+df_texts$lang <- detect_language(df_texts$text)
+df_texts.en <- df_texts %>% filter(lang=="en") %>% dplyr::select(-c(lang))
+# df_texts.nonen <- df_texts %>% filter(lang!="en")
+
+# TO LONL
+df_texts.en <- df_texts.en %>% separate(text, paste0("page", as.character(1:500)), sep="---PAGE-BREAK---")
+# Transform to long-format: id-link as observation
+df_texts.en.long <- melt(df_texts.en, id.vars=c("id_link_num")) %>%
+  filter(!is.na(value)) %>% rename(page=variable, text=value) %>%
+  mutate(page=as.character(page),
+         page=substr(page, 5, nchar(page)),
+         # text=tolower(text), # CHANGE FOR NER <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+         id=substr(id_link_num, 1, (nchar(id_link_num)-2))) 
+
+### NLP part
+# Initilize spacy model
+cnlp_init_spacy("en_core_web_sm")
+
+# Annotate the text
+annotation <- cnlp_annotate(input = df_texts.en.long, verbose = 10)
+# Add City ID
+df_temp <- annotation$token
+df_temp <- df_temp %>% left_join(annotation$document %>% dplyr::select(id, doc_id))
+annotation$token <- df_temp
+
+
+####################################################################
+### TODO: Something with Named Entity Recognisition
+
+# Most popular organization?
+t.1 <- annotation$entity %>% filter(entity_type=="ORG") %>%
+  dplyr::select(entity) %>% table() %>% as.data.frame()
+
+# Federal VS. Local level?
+t.2 <- annotation$entity %>% filter(entity_type=="GPE") %>%
+  dplyr::select(entity) %>% table() %>% as.data.frame()
+
+
+
+
+# Remove stopwords and non-alphabetical tokens
+stopwords_vec <- stopwords::stopwords(language = "en",source = "smart")
+stopwords_vec <- c(stopwords_vec, "e.g.", "la")
+df_text_preprocessing <- annotation$token %>%
+  filter(!(lemma %in% stopwords_vec),
+         !(upos %in% c("DET", "PUNCT")),
+         (grepl("^[A-Za-z]+$", lemma, perl = T))) %>%
+  dplyr::select(doc_id, lemma) %>%
+  group_by(id) %>%
+  # group_by(doc_id) %>% # PAGE AS THE UNIT OF OBSERVATION <<<<<<<<<<<<<<<<<<<<<<<<
+  summarise_at(vars(lemma), funs(paste(., collapse = ' ')))
+
+# Remove pages with low number of characters
+df_text_preprocessing$len <- unlist(lapply(df_text_preprocessing$lemma, nchar))
+df_text_preprocessing <- df_text_preprocessing %>% filter(len>200)
+
+# Create Corpus and Document term matrix
+corpus_q2_0b <- corpus(df_text_preprocessing$lemma,
+                      docvars=df_text_preprocessing %>% dplyr::select(-c(lemma)))
+dfm_q2_0b <- tokens(corpus_q2_0b) %>%
+  tokens_ngrams(n = c(1, 2)) %>%
+  dfm() %>%
+  dfm_trim(min_termfreq = 10)
+ncol(dfm_q2_0b)
+
+### 1. STM 
+stm_model <- stm(documents = dfm_q2_0b,
+                 K = 10, max.em.its = 75, init.type = "Spectral")
+labelTopics(stm_model)
+plot(stm_model, type = "summary", n = 5, xlim = c(0,1))
+
+mod.out.corr <- topicCorr(stm_model, cutoff = 0.0000000000001)
+plot(mod.out.corr)
+
+### 2. Correspondense analysis, Documents position
+tmod_ca <- textmodel_ca(dfm_q2_0b)
+textplot_scale1d(tmod_ca)
+dat_ca <- data.frame(dim1 = coef(tmod_ca, doc_dim = 1)$coef_document, 
+                     dim2 = coef(tmod_ca, doc_dim = 2)$coef_document)
+head(dat_ca)
+plot(1, xlim = c(-2, 2), ylim = c(-2, 2), type = "n", xlab = "Dimension 1", ylab = "Dimension 2")
+grid()
+text(dat_ca$dim1, dat_ca$dim2, labels = rownames(dat_ca), cex = 0.8, col = rgb(0, 0, 0, 0.7))
+
+# 3. LDA, Topics
+tmod_lda <- textmodel_lda(dfm_q2_0b, k = 10)
+terms(tmod_lda, 10)
 
 
 
@@ -510,83 +716,6 @@ head(sort(beta, decreasing = T), 20)
 head(sort(beta, decreasing = F), 20)
 
 
-#############################################################################################################
-############## Q3: Association Rules
-#############################################################################################################
-
-### --- Preprocessing
-df_q3_0 <- df_cities.20 %>% filter(qstn == "3.0")
-df_q3_0.benifit <- df_q3_0 %>% filter(colname %in% c("Co-benefit area"), resp!="")
-df_q3_0.hazards <- df_q3_0 %>% filter(colname %in% c("Climate hazards"), resp!="")
-df_q3_0.actions <- df_q3_0 %>% filter(colname %in% c("Action"), resp!="")
-
-
-### --- 1. Co-benifits
-
-# To id-row format
-df_q3_0.benifit <- df_q3_0.benifit %>%
-  group_by(id, rown) %>%
-  summarise_at(vars(resp), funs(paste(., collapse = ';'))) %>%
-  ungroup() %>%  # Check 
-  dplyr::select(resp) %>%
-  rename(items=resp)
-
-### Association Rules
-setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
-export(df_q3_0.benifit, file = "df-q3-0-benifit.csv", "csv")
-tr <- read.transactions("df-q3-0-benifit.csv", format = 'basket', sep=';')
-summary(tr)
-association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.5, maxlen=3))
-# subRules <- association.rules[quality(association.rules)$confidence>0.9]
-top10subRules <- head(association.rules, n = 10, by = "confidence")
-top10subRules <- head(association.rules, n = 10, by = "count")
-plot(top10subRules, method = "graph",  engine = "htmlwidget")
-
-
-### --- 2. Hazards
-
-# To id-row format
-df_q3_0.hazards <- df_q3_0.hazards %>%
-  group_by(id) %>%
-  summarise_at(vars(resp), funs(paste(., collapse = ';'))) %>%
-  ungroup() %>%  # Check 
-  dplyr::select(resp) %>%
-  rename(items=resp)
-
-### Association Rules
-setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
-export(df_q3_0.hazards, file = "df-q3-0-hazards.csv", "csv")
-tr <- read.transactions("df-q3-0-hazards.csv", format = 'basket', sep=';')
-summary(tr)
-association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.9, maxlen=2))
-# subRules <- association.rules[quality(association.rules)$confidence>0.9]
-#top10subRules <- head(association.rules, n = 10, by = "confidence")
-top10subRules <- head(association.rules, n = 10, by = "count")
-plot(top10subRules, method = "graph",  engine = "htmlwidget")
-
-
-### --- 3. Actions 
-
-# To id-row format
-df_q3_0.actions <- df_q3_0.actions %>%
-  group_by(id) %>%
-  summarise_at(vars(resp), funs(paste(., collapse = ';'))) %>%
-  ungroup() %>%  # Check 
-  dplyr::select(resp) %>%
-  rename(items=resp)
-
-### Association Rules
-setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
-export(df_q3_0.benifit, file = "df-q3-0-benifit.csv", "csv")
-tr <- read.transactions("df-q3-0-benifit.csv", format = 'basket', sep=';')
-summary(tr)
-association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.9, maxlen=10))
-# subRules <- association.rules[quality(association.rules)$confidence>0.9]
-top10subRules <- head(association.rules, n = 10, by = "confidence")
-top10subRules <- head(association.rules, n = 10, by = "count")
-plot(top10subRules, method = "graph",  engine = "htmlwidget")
-
-
 
 
 ########################################################
@@ -625,7 +754,9 @@ df_corps.20$resp[grepl("^Other, please specify", as.character(df_corps.20$resp))
 ############## Q2.4a: Opportunities
 #############################################################################################################
 
-# TODO: Comperehnsive question. A lot can be done here. Potenial connection to Opportunies in Cities
+# TODO: Comperehnsive question. A lot can be done here. 
+# Potenial connection to question Q3.2a in Cities.
+
 
 ### Preprocessing
 df_corp_q2_4a <- df_corps.20 %>% filter(qstn == "C2.4a")
@@ -640,11 +771,15 @@ df_corp_q2_4a.wide <- df_corp_q2_4a.wide %>%
   mutate(total_descr=paste(specific_descr, financial_figure_descr, startegy_descr, comment),
          magnitude_impact_bin=dplyr::recode(magnitude_impact,
                                             "High"='High', "Medium-high"="High", "Medium"="High",
-                                            "Medium-low"="Low", "Low"="Low")) %>%
-  filter(total_descr!="   ", !(magnitude_impact_bin %in% c("", "Unknown")))
+                                            "Medium-low"="Low", "Low"="Low"),
+         realize_cost_log=log(as.numeric(realize_cost))) %>%
+  filter(total_descr!="   ",
+         # !(magnitude_impact_bin %in% c("", "Unknown")),
+         !is.na(realize_cost_log),
+         realize_cost_log>0)
 
 # TODO: Investigate the part about financial figure
-hist(log(as.numeric(df_corp_q2_4a.wide$financial_figure)), breaks = 20)
+hist(df_corp_q2_4a.wide$realize_cost_log, breaks = 20)
 
 
 ### Preprocessing with cleanNLP
@@ -657,7 +792,7 @@ annotation <- cnlp_annotate(input = tolower(df_corp_q2_4a.wide$total_descr))
 df_corp_q2_4a.wide$doc_id <- annotation$document$doc_id
 
 # Remove stopwords and non-alphabetical tokens
-stopwords_vec <- stopwords(language = "en",source = "smart")
+stopwords_vec <- stopwords::stopwords(language = "en",source = "smart")
 stopwords_vec <- c(stopwords_vec, "e.g.", "la")
 df_text_preprocessing <- annotation$token %>%
   filter(!(lemma %in% stopwords_vec),
@@ -674,11 +809,32 @@ corpus_q2_4a <- corpus(df_corp_q2_4a.wide$lemma,
 dfmat_q2_4a <- tokens(corpus_q2_4a) %>%
   tokens_ngrams(n = c(1)) %>%
   dfm() %>%
-  dfm_trim(min_termfreq = 100) %>%
-  dfm_tfidf()
+  dfm_trim(min_termfreq = 10)
 ncol(dfmat_q2_4a)
 
-### Binomial GLM
+# Remove documents without vocabulary
+dfmat_q2_4a <- dfmat_q2_4a[rowSums(dfmat_q2_4a) != 0,]
+
+### Topic Modelling, Wordfish and Correspondence analysis
+
+# Group by ID and merge all answers for the corporation
+# df_corp_q2_4a.wide.id <- df_corp_q2_4a.wide %>%
+#   group_by(id) %>%
+#   summarise_at(vars(lemma), funs(paste(., collapse = ' '))) %>%
+#   ungroup()
+# 
+# # Preprocessing with quanteda
+# corpus_q2_4a.id <- corpus(df_corp_q2_4a.wide.id$lemma)
+# dfmat_q2_4a.id <- tokens(corpus_q2_4a.id) %>%
+#   tokens_ngrams(n = c(1)) %>%
+#   dfm() %>%
+#   dfm_trim(min_termfreq = 1)
+#   # dfm_tfidf()
+# ncol(dfmat_q2_4a.id)
+# sum(rowSums(dfmat_q2_4a.id) == 0)
+
+
+### 0. Binomial GLM
 lasso <- glmnet(x = dfmat_q2_4a,
                 y = dfmat_q2_4a@docvars$magnitude_impact_bin,
                 alpha = 1,
@@ -687,25 +843,6 @@ index_best <- which(lasso$lambda == min(lasso$lambda))
 beta <- lasso$beta[, index_best]
 head(sort(beta, decreasing = T), 20)
 head(sort(beta, decreasing = F), 20)
-
-### Topic Modelling, Wordfish and Correspondence analysis
-
-# Group by ID and merge all answers for the corporation
-df_corp_q2_4a.wide.id <- df_corp_q2_4a.wide %>%
-  group_by(id) %>%
-  summarise_at(vars(lemma), funs(paste(., collapse = ' '))) %>%
-  ungroup()
-
-# Preprocessing with quanteda
-corpus_q2_4a.id <- corpus(df_corp_q2_4a.wide.id$lemma)
-dfmat_q2_4a.id <- tokens(corpus_q2_4a.id) %>%
-  tokens_ngrams(n = c(1)) %>%
-  dfm() %>%
-  dfm_trim(min_termfreq = 1)
-  # dfm_tfidf()
-ncol(dfmat_q2_4a.id)
-
-sum(rowSums(dfmat_q2_4a.id) == 0)
 
 # 1. Wordfish, Words position
 tmod_wf <- textmodel_wordfish(dfmat_q2_4a.id, dir = c(6, 5))
@@ -719,6 +856,54 @@ textplot_scale1d(tmod_ca)
 # 3. LDA, Topics
 tmod_lda <- textmodel_lda(dfmat_q2_4a.id, k = 5)
 terms(tmod_lda, 10)
+
+# 4. STM 
+# TODO: How to find optimal number number of topics? "K=0" or other methods?
+# stm_model <- stm(documents = dfmat_q2_4a,
+#                  K = 0, max.em.its = 75, init.type = "Spectral")
+# stm_model.search <- searchK(documents = dfmat_q2_4a, K = c(5, 10))
+
+# STM Model 1.
+stm_model.1 <- stm(documents = dfmat_q2_4a,
+                 K = 10, max.em.its = 75, init.type = "Spectral")
+
+# STM Model 2. With Realize cost
+stm_model.2 <- stm(documents = dfmat_q2_4a,
+                 prevalence =~ realize_cost_log,
+                 data = dfmat_q2_4a@docvars,
+                 K = 10, max.em.its = 75, init.type = "Spectral")
+prep <- estimateEffect(1:10 ~ realize_cost_log, stm_model.2,
+                       uncertainty = "Global",
+                       meta = dfmat_q2_4a@docvars)
+summary(prep, topics=c(1:10))
+
+# STM Model 3. With Opportunity type and K=20
+stm_model.3 <- stm(documents = dfmat_q2_4a,
+                   prevalence =~ type,
+                   data = dfmat_q2_4a@docvars,
+                   K = 20, max.em.its = 75, init.type = "Spectral")
+
+prep <- estimateEffect(1:20 ~ type, stm_model.3,
+                       uncertainty = "Global",
+                       meta = dfmat_q2_4a@docvars)
+summary(prep, topics=c(1:20))
+
+plot(prep, covariate = "type", topics = c(1:20),
+     model = stm_model.3, method = "difference",
+     cov.value1 = "Markets", cov.value2 = "Resilience",
+     xlab = "Resilience < ....... > Markets",
+     main = "Topics by the Opportunity Type",
+     xlim = c(-.3, .3),
+     labeltype = "custom")
+
+
+labelTopics(stm_model.3)
+cloud(stm_model.2, topic = 8, scale = c(5,1))
+plot(stm_model.2, type = "perspectives", topics = c(1, 7))
+mod.out.corr <- topicCorr(stm_model.2)
+plot(mod.out.corr)
+
+
 
 
 ################################## TODO
