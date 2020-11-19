@@ -48,11 +48,14 @@ df_cities.20$resp <- temp_vec
 temp_vec <- df_cities.20$colname
 Encoding(temp_vec) <- "UTF-8"
 df_cities.20$colname <- temp_vec
+temp_vec <- df_cities.20$org
+Encoding(temp_vec) <- "UTF-8"
+df_cities.20$org <- temp_vec
 # Recode 'Other' category
 df_cities.20$resp[grepl("^Other, please specify", as.character(df_cities.20$resp))] <- "Other"
 # Calculate question with longest answer
-df_cities.20$len <- unlist(lapply(df_cities.20$resp, nchar))
-t <- df_cities.20 %>% group_by(qstname) %>% summarise(mean_len=mean(len, na.rm=T))
+# df_cities.20$len <- unlist(lapply(df_cities.20$resp, nchar))
+# t <- df_cities.20 %>% group_by(qstname) %>% summarise(mean_len=mean(len, na.rm=T))
 
 # --- Load the 2019 data
 df_cities.19 <- read.csv('2019_Full_Cities_Dataset.csv') %>% 
@@ -493,4 +496,35 @@ top10subRules <- head(association.rules, n = 10, by = "count")
 plot(top10subRules, method = "graph",  engine = "htmlwidget")
 
 ### --- 4. Addaptation Goals 
+
+
+#############################################################################################################
+############## Cities Population, 2020
+#############################################################################################################
+
+# df_q0_1 <- df_cities.20 %>% filter(qstn == "0.1", coln == 1) %>% dplyr::select(org, resp)
+# t <- as.data.frame(table(df_q0_1$resp))
+
+df_q0_5 <- df_cities.20 %>% filter(qstn == "0.5", coln == 1) %>% dplyr::select(id, org, resp) %>%
+  mutate(resp=as.numeric(resp))
+setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
+# export(df_q0_5, "df_q0_5.coded.xlsx", "xlsx")
+
+df_q0_5[df_q0_5$id == "841098",]$resp <- 338000
+df_q0_5[df_q0_5$id == "60318",]$resp <- 494000
+df_q0_5[df_q0_5$id == "54652",]$resp <- 676000
+df_q0_5[df_q0_5$id == "839650",]$resp <- 124100
+df_q0_5[df_q0_5$id == "826381",]$resp <- 4412000
+df_q0_5[df_q0_5$id == "841003",]$resp <- 524700
+df_q0_5[df_q0_5$id == "826211",]$resp <- 399724
+df_q0_5[df_q0_5$id == "42388",]$resp <- 1383432
+df_q0_5[df_q0_5$id == "845309",]$resp <- 329675
+
+
+
+
+
+
+
+
 
