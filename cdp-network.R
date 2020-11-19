@@ -505,10 +505,11 @@ plot(top10subRules, method = "graph",  engine = "htmlwidget")
 # df_q0_1 <- df_cities.20 %>% filter(qstn == "0.1", coln == 1) %>% dplyr::select(org, resp)
 # t <- as.data.frame(table(df_q0_1$resp))
 
+# setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
+# export(df_q0_5, "df_q0_5.coded.xlsx", "xlsx")
+
 df_q0_5 <- df_cities.20 %>% filter(qstn == "0.5", coln == 1) %>% dplyr::select(id, org, resp) %>%
   mutate(resp=as.numeric(resp))
-setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
-# export(df_q0_5, "df_q0_5.coded.xlsx", "xlsx")
 
 df_q0_5[df_q0_5$id == "841098",]$resp <- 338000
 df_q0_5[df_q0_5$id == "60318",]$resp <- 494000
