@@ -18,7 +18,7 @@ setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/Corporat
 
 # --- Load the 2020 data
 df_corps.20 <- read.csv('2020_Full_Climate_Change_Dataset.csv') %>% 
-  select('id' = account_number, 'org' = organization, 
+  dplyr::select('id' = account_number, 'org' = organization, 
          'qstn' = question_number, 'qstname' = question_unique_reference,
          'coln' = column_number, 'colname' = column_name,
          'rown' = row_number, 'rowname' = row_name, 'resp' = response_value)
@@ -37,7 +37,7 @@ setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/Cities/C
 
 # --- Load the 2020 data
 df_cities.20 <- read.csv('2020_Full_Cities_Dataset.csv') %>% 
-  select('id' = Account.Number, 'org' = Organization, 'cntry' = Country,
+  dplyr::select('id' = Account.Number, 'org' = Organization, 'cntry' = Country,
          'region' = CDP.Region, 'qstn' = Question.Number,
          'qstname' = Question.Name, 'coln' = Column.Number, 'colname' = Column.Name,
          'rown' = Row.Number, 'rowname' = Row.Name, 'resp' = Response.Answer)
@@ -59,7 +59,7 @@ df_cities.20$resp[grepl("^Other, please specify", as.character(df_cities.20$resp
 
 # --- Load the 2019 data
 df_cities.19 <- read.csv('2019_Full_Cities_Dataset.csv') %>% 
-  select('id' = Account.Number, 'org' = Organization, 'cntry' = Country,
+  dplyr::select('id' = Account.Number, 'org' = Organization, 'cntry' = Country,
          'region' = CDP.Region, 'qstn' = Question.Number,
          'qstname' = Question.Name, 'coln' = Column.Number, 'colname' = Column.Name,
          'rown' = Row.Number, 'rowname' = Row.Name, 'resp' = Response.Answer)
@@ -244,18 +244,13 @@ t <- as.data.frame(table(df_q3_3.init$resp))
 # Mean number of aggrements per city
 nrow(df_q3_3.init) / length(unique(df_q3_3.init$id))
 
+
 # Transform to network
 g <- graph_from_edgelist(as.matrix(df_q3_3.init %>% dplyr::select(org, resp)))
 V(g)$type <- bipartite_mapping(g)$type
 V(g)$color <- ifelse(V(g)$type, "lightblue", "salmon")
 V(g)$shape <- ifelse(V(g)$type, "square", "circle")
 E(g)$color <- "lightgray"
-plot(g,
-     vertex.label.cex = 0.5,
-     vertex.label=NA,
-     vertex.label.color = "black",
-     vertex.size=3,
-     edge.arrow.size=0.1)
 
 # Transform to one-mode network
 bipartite_matrix  <- as_incidence_matrix(g)
@@ -278,7 +273,6 @@ df_q1_1a <- df_cities.19 %>%
 remove_resp <- c("", "Individual city commitment", "Other")
 df_q1_1a <- df_q1_1a %>% filter(!(resp %in% remove_resp))
 df_q1_1a <- df_q1_1a %>% distinct(id,resp, .keep_all= TRUE)
-sum(df_q1_1a$resp == "Global Covenant of Mayors for Climate & Energy") / length(unique(df_q1_1a$id))
 nrow(df_q1_1a) / length(unique(df_q1_1a$id))
 t <- as.data.frame(table(df_q1_1a$resp))
 

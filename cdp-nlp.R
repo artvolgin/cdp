@@ -38,7 +38,7 @@ setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/Cities/C
 
 # --- Load the 2020 data
 df_cities.20 <- read.csv('2020_Full_Cities_Dataset.csv') %>% 
-  select('id' = Account.Number, 'org' = Organization, 'cntry' = Country,
+  dplyr::select('id' = Account.Number, 'org' = Organization, 'cntry' = Country,
          'region' = CDP.Region, 'qstn' = Question.Number,
          'qstname' = Question.Name, 'coln' = Column.Number, 'colname' = Column.Name,
          'rown' = Row.Number, 'rowname' = Row.Name, 'resp' = Response.Answer)
@@ -57,7 +57,7 @@ t <- df_cities.20 %>% group_by(qstname) %>% summarise(mean_len=mean(len, na.rm=T
 
 # --- Load the 2019 data
 df_cities.19 <- read.csv('2019_Full_Cities_Dataset.csv') %>% 
-  select('id' = Account.Number, 'org' = Organization, 'cntry' = Country,
+  dplyr::select('id' = Account.Number, 'org' = Organization, 'cntry' = Country,
          'region' = CDP.Region, 'qstn' = Question.Number,
          'qstname' = Question.Name, 'coln' = Column.Number, 'colname' = Column.Name,
          'rown' = Row.Number, 'rowname' = Row.Name, 'resp' = Response.Answer)
@@ -72,16 +72,9 @@ df_cities.19$colname <- temp_vec
 df_cities.19$resp[grepl("^Other:", as.character(df_cities.19$resp))] <- "Other"
 
 
+############## ~~~ CITIES ~~~ ###################################################################
 
-#############################################################################################################
-############## Q2.1 Hazards
-#############################################################################################################
-
-# TODO ...
-
-#############################################################################################################
-############## Q2.2: NLP 
-#############################################################################################################
+############## Q2.2: NLP ##################################################################################
 
 ### Preprocessing
 df_q2_2 <- df_cities.20 %>% filter(qstn == "2.2")
@@ -174,9 +167,7 @@ beta <- lasso$beta[, index_best]
 head(sort(beta, decreasing = T), 10)
 head(sort(beta, decreasing = F), 10)
 
-#############################################################################################################
-############## Q2.0b, Q3.0, Q5.5a : NLP, 2020
-#############################################################################################################
+############## Q2.0b, Q3.0, Q5.5a : NLP, 2020 #########################################################################
 
 # TODO:
 # 1. Look for .pdf files in the page, TOO COMLICATED
@@ -451,9 +442,7 @@ df_q5_5a.link <- df_q5_5a.link[,colSums(is.na(df_q5_5a.link)) != nrow(df_q5_5a.l
 
 
 
-#############################################################################################################
-############## Q2.0b, Q3.0, Q5.5a : NLP, 2019 
-#############################################################################################################
+############## Q2.0b, Q3.0, Q5.5a : NLP, 2019 ################################################################
 
 # TODO:
 # 1. Look for .pdf files in the page, TOO COMLICATED
@@ -540,8 +529,6 @@ df_temp <- annotation$token
 df_temp <- df_temp %>% left_join(annotation$document %>% dplyr::select(id, doc_id))
 annotation$token <- df_temp
 
-
-####################################################################
 ### TODO: Something with Named Entity Recognisition
 
 # Most popular organization?
@@ -605,9 +592,8 @@ terms(tmod_lda, 10)
 
 
 
-#############################################################################################################
-############## Q6.0 : NLP 
-#############################################################################################################
+
+############## Q6.0 : NLP  ####################################################################
 
 # TODO: Looks promising!
 df_q6_0 <- df_cities.20 %>% filter(qstn == "6.0")
@@ -616,12 +602,10 @@ df_q6_0.opport <- df_q6_0 %>%
   filter(colname == "Opportunity")
 sort(table(df_q6_0.opport$resp))
 df_q6_0.descr <- df_q6_0 %>%
-  filter(colname == "Describe how the city is maximizing this opportunity")
+  filter(colname == "Describe how the city is maximizing this opportunity", resp != "")
 
 
-#############################################################################################################
-############## Q6.5 : NLP 
-#############################################################################################################
+############## Q6.5 : NLP ###################################################################################
 
 ### Additional Preprocessing for Currency
 df_currency <- df_cities.20 %>%
@@ -718,17 +702,9 @@ head(sort(beta, decreasing = F), 20)
 
 
 
-########################################################
-###########################################################################################################
-#############################################################################################################
-#################################################################################################
-############################################################################################################
+
+
 ############## ~~~ CORPORATIONS ~~~ ###################################################################
-########################################################################################
-#############################################################################################################
-###########################################################################################################
-###########################################################################################
-###################################################################
 
 # Set the working directory
 setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/Corporations/Corporations Responses/Climate Change'))
@@ -750,9 +726,7 @@ df_corps.20$colname <- temp_vec
 df_corps.20$resp[grepl("^Other, please specify", as.character(df_corps.20$resp))] <- "Other"
 
 
-#############################################################################################################
-############## Q2.4a: Opportunities
-#############################################################################################################
+############## Q2.4a: Opportunities #####################################################################
 
 # TODO: Comperehnsive question. A lot can be done here. 
 # Potenial connection to question Q3.2a in Cities.
@@ -906,7 +880,7 @@ plot(mod.out.corr)
 
 
 
-################################## TODO
+################################## TODO ##############################################
 
 # 1. Hazards --> Actions --> Co-benefits. What are the benefits for each Hazard?
 # 2. Add Mitigation Actions (Question 5.4)
