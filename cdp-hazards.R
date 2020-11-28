@@ -57,7 +57,7 @@ df_cities.20$resp[grepl("^Other, please specify", as.character(df_cities.20$resp
 # --- Load the 2019 data
 setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/Cities/Cities Responses'))
 df_cities.19 <- read.csv('2019_Full_Cities_Dataset.csv') %>% 
-  select('id' = Account.Number, 'org' = Organization, 'cntry' = Country,
+  dplyr::select('id' = Account.Number, 'org' = Organization, 'cntry' = Country,
          'region' = CDP.Region, 'qstn' = Question.Number,
          'qstname' = Question.Name, 'coln' = Column.Number, 'colname' = Column.Name,
          'rown' = Row.Number, 'rowname' = Row.Name, 'resp' = Response.Answer)
@@ -76,7 +76,7 @@ df_cities.19$resp[grepl("^Other, please specify", as.character(df_cities.19$resp
 
 # --- Load the 2018 data
 df_cities.18 <- read.csv('2018_Full_Cities_Dataset.csv') %>% 
-  select('id' = Account.Number, 'org' = Organization, 'cntry' = Country,
+  dplyr::select('id' = Account.Number, 'org' = Organization, 'cntry' = Country,
          'region' = CDP.Region, 'qstn' = Question.Number,
          'qstname' = Question.Name, 'coln' = Column.Number, 'colname' = Column.Name,
          'rown' = Row.Number, 'rowname' = Row.Name, 'resp' = Response.Answer)
@@ -108,7 +108,7 @@ df_cities_info[df_cities_info$id == "841003",]$population <- 524700
 df_cities_info[df_cities_info$id == "826211",]$population <- 399724
 df_cities_info[df_cities_info$id == "42388",]$population <- 1383432
 df_cities_info[df_cities_info$id == "845309",]$population <- 329675
-df_cities_info$population_log <- log(df_cities_info$population)
+# df_cities_info$population_log <- log(df_cities_info$population)
 
 # --- 2. Parse coordinates
 # register_google(key = "AIzaSyBXXfPn9HfpPLzLQUyYjMVoUwvN7MRgNnk")
@@ -158,13 +158,14 @@ df_cities_info.coords <- df_cities_info %>% dplyr::select(id, lon, lat)
 # export(df_cities_info_, file = "df_cities_info.xlsx", format = "xlsx")
 setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
 df_cities_info <- rio::import("df_cities_info.coded.xlsx")
-df_cities_info <- df_cities_info %>% filter(population>=100000, !is.na(gdp_per_capita))
+# df_cities_coords <- readRDS("df_cities_coords")
+df_cities_info <- df_cities_info %>% left_join(df_cities_info.coords)
+df_cities_info <- df_cities_info %>% filter(population>=50000, !is.na(gdp_per_capita))
 
 # --- 5. Weather
 setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
 temp_raster <- raster("ERA5_mean_temp.tif") # ECMWF/ERA5/MONTHLY, mean_2m_air_temperature, mean 2019
 precip_raster <- raster("ERA5_sum_precip.tif") # ECMWF/ERA5/MONTHLY, total_precipitation, sum 2019
-df_cities_info <- df_cities_info %>% left_join(df_cities_info.coords)
 df_cities_info <- df_cities_info %>% st_as_sf(coords=c("lon", "lat"))
 df_cities_info$mean_temp <- raster::extract(temp_raster, df_cities_info)
 df_cities_info$mean_temp <- kelvin.to.celsius(df_cities_info$mean_temp, round = 3)
@@ -172,8 +173,8 @@ df_cities_info$sum_precip <- raster::extract(precip_raster, df_cities_info)
 
 # --- 6. NO2 values
 setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
-# TODO
-
+no2_raster <- raster("NO2_sum.tif") # COPERNICUS/S5P/OFFL/L3_NO2, NO2_column_number_density, sum 2019
+df_cities_info$no2_sum <- raster::extract(no2_raster, df_cities_info)
 
 
 #############################################################################################################

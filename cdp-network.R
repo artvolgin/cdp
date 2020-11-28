@@ -12,6 +12,10 @@ library(utf8)
 # Network
 library(igraph)
 library(tnet)
+library(arules)
+library(arulesViz)
+library(reshape2)
+library(quantmod)
 
 # Set the working directory
 setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/Corporations/Corporations Responses/Climate Change'))
@@ -316,8 +320,10 @@ df_q3_0 <- df_cities.20 %>% filter(qstn == "3.0",
 
 df_q3_0.hazards <- df_q3_0 %>% filter(colname %in% c("Climate hazards"), resp!="") %>%
   dplyr::select(id, rown, resp) %>% rename(hazard=resp) %>%
-  mutate(hazard=unlist(sapply(strsplit(hazard, "\\ > "), "[", 1)), # Merge to large groups
-         hazard=dplyr::recode(hazard, "Biological hazards "="Biological hazards")) %>%
+  
+  mutate(hazard=str_replace(hazard, "\\> ", "")) %>% 
+  # mutate(hazard=unlist(sapply(strsplit(hazard, "\\ > "), "[", 1)), # Merge to large groups
+  #        hazard=dplyr::recode(hazard, "Biological hazards "="Biological hazards")) %>%
   filter(hazard!="Question not applicable")
 
 df_q3_0.actions <- df_q3_0 %>% filter(colname %in% c("Action"), resp!="")
@@ -333,6 +339,19 @@ df_q3_0.benifits <- df_q3_0.benifits %>%
   summarise_at(vars(resp), funs(paste(., collapse = ';'))) %>%
   ungroup() %>% rename(benifits=resp)
 
+
+### Version 0: Select only "Extreme hot temperature" <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+# df_q3_0.hazards <- df_q3_0.hazards %>% filter(hazard == "Extreme hot temperature")
+# df_q3_0.wide <- df_q3_0.hazards %>%
+#   full_join(df_q3_0.actions, by = c("id", "rown")) %>%
+#   full_join(df_q3_0.benifits, by = c("id", "rown")) %>%
+#   dplyr::select(-hazard) %>% 
+#   filter(!is.na(actions), !is.na(benifits))
+# df_q3_0.wide <- df_q3_0.wide %>% mutate(
+#   actions_benifits=paste(actions, benifits, sep = ";"))
+# df_q3_0.wide.rules <- df_q3_0.wide %>% dplyr::select(actions_benifits) %>%
+#   rename(items=actions_benifits)
+
 ### Version 1: Hazards, Actions, Benifits
 df_q3_0.wide <- df_q3_0.hazards %>%
   full_join(df_q3_0.actions, by = c("id", "rown")) %>%
@@ -345,12 +364,13 @@ df_q3_0.wide.rules <- df_q3_0.wide %>% dplyr::select(hazard_actions_benifits) %>
 
 ### Version 2: Actions, Benifits
 # df_q3_0.wide <- df_q3_0.actions %>%
-#   full_join(df_q3_0.benifits, by = c("id", "rown"))
+#  full_join(df_q3_0.benifits, by = c("id", "rown"))
 # df_q3_0.wide <- df_q3_0.wide %>% filter(rowSums(is.na(df_q3_0.wide)) == 0)
 # df_q3_0.wide <- df_q3_0.wide %>% mutate(
-#   actions_benifits=paste(actions, benifits, sep = ";"))
+#  actions_benifits=paste(actions, benifits, sep = ";"))
 # df_q3_0.wide.rules <- df_q3_0.wide %>% dplyr::select(actions_benifits) %>%
-#  rename(items=actions_benifits)
+# rename(items=actions_benifits)
+
 # 
 # ### Version 3: Hazards, Actions
 # df_q3_0.wide <- df_q3_0.hazards %>%
@@ -404,21 +424,34 @@ df_q3_0.wide.rules <- df_q3_0.wide %>% dplyr::select(hazard_actions_benifits) %>
 # df_q3_0.wide.rules <- df_q3_0.wide %>% dplyr::select(hazard_actions_benifits) %>%
 #   rename(items=hazard_actions_benifits)
 
-### Version 3
-# TODO: Separately by type of hazard
-
 ### Association Rules
 setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
 export(df_q3_0.wide.rules, file = "df_q3_0.wide.rules.csv", "csv")
 tr <- read.transactions("df_q3_0.wide.rules.csv", format = 'basket', sep=';')
+# association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.5, maxlen=3))
 association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.5, maxlen=3))
+association.rules
+# Remove association rules with Hazards in RHS
+# hazards_list <- unique(df_q3_0.hazards$hazard)
+# association.rules <- subset(association.rules, subset = !(rhs %in% hazard))
+for (hazard in hazards_list){
+  
+  association.rules <- subset(association.rules, subset = !(rhs %in% "Biological hazards Insect infestation"))
+
+}
+
+# Select only rules which are starting from hazards
+# association.rules <- subset(association.rules, (lhs %in% hazards_list))
+# association.rules
+
+
 plot(association.rules,method="two-key plot")
 # subRules <- association.rules[quality(association.rules)$confidence>0.9]
 topSubRules <- head(association.rules, n = 20, by = "count")
-topSubRules <- head(association.rules, n = 20, by = "support")
 topSubRules <- head(association.rules, n = 20, by = "confidence")
-topSubRules <- head(association.rules, n = 20, by = "lift")
-topSubRules <- head(association.rules, n = 20, by = c("confidence", "lift"))
+topSubRules <- head(association.rules, n = 20, by = "support")
+topSubRules <- head(association.rules, n = 20, by = c("support", "confidence"))
+topSubRules <- head(association.rules, n = 30, by = c("confidence", "count"))
 plot(topSubRules, method = "graph",  engine = "htmlwidget")
 
 
@@ -451,21 +484,25 @@ plot(top10subRules, method = "graph",  engine = "htmlwidget")
 # To id-row format
 df_q3_0.hazards <- df_q3_0.hazards %>%
   group_by(id) %>%
-  summarise_at(vars(resp), funs(paste(., collapse = ';'))) %>%
+  summarise_at(vars(hazard), funs(paste(., collapse = ';'))) %>%
   ungroup() %>%  # Check 
-  dplyr::select(resp) %>%
-  rename(items=resp)
+  dplyr::select(hazard) %>%
+  rename(items=hazard)
 
 ### Association Rules
 setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
 export(df_q3_0.hazards, file = "df-q3-0-hazards.csv", "csv")
 tr <- read.transactions("df-q3-0-hazards.csv", format = 'basket', sep=';')
 summary(tr)
-association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.9, maxlen=2))
+association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.1, maxlen=2))
+plot(association.rules,method="two-key plot")
 # subRules <- association.rules[quality(association.rules)$confidence>0.9]
 #top10subRules <- head(association.rules, n = 10, by = "confidence")
-top10subRules <- head(association.rules, n = 10, by = "count")
-plot(top10subRules, method = "graph",  engine = "htmlwidget")
+topSubRules <- head(association.rules, n = 10, by = "count")
+topSubRules <- head(association.rules, n = 20, by = c("confidence", "lift"))
+plot(topSubRules, method = "graph",  engine = "htmlwidget")
+plot(topSubRules, method = "graph")
+
 
 
 ### --- 3. Actions 
@@ -490,6 +527,9 @@ top10subRules <- head(association.rules, n = 10, by = "count")
 plot(top10subRules, method = "graph",  engine = "htmlwidget")
 
 ### --- 4. Addaptation Goals 
+
+
+
 
 
 #############################################################################################################

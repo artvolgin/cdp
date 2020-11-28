@@ -167,7 +167,7 @@ beta <- lasso$beta[, index_best]
 head(sort(beta, decreasing = T), 10)
 head(sort(beta, decreasing = F), 10)
 
-############## Q2.0b, Q3.0, Q5.5a : NLP, 2020 #########################################################################
+############## >>>>> Q2.0b, Q3.0, Q5.5a : NLP, 2020 #########################################################################
 
 # TODO:
 # 1. Look for .pdf files in the page, TOO COMLICATED
@@ -442,11 +442,12 @@ df_q5_5a.link <- df_q5_5a.link[,colSums(is.na(df_q5_5a.link)) != nrow(df_q5_5a.l
 
 
 
-############## Q2.0b, Q3.0, Q5.5a : NLP, 2019 ################################################################
+############## >>>>> Q2.0b, Q3.0, Q5.5a : PDF DOCUMENTS, 2019 ################################################################
 
 # TODO:
-# 1. Look for .pdf files in the page, TOO COMLICATED
-# 2. Same questions in 2019 and 2018
+# 1. Add Categorical variables to STM
+# 2. Combine Reports from 2018 and 2019
+
 
 ### --------- Q2.0b
 
@@ -503,11 +504,8 @@ colnames(df_texts) <- "text"
 df_texts$id_link_num <- substr(pdf_files, 1, (nchar(pdf_files)-4))
 
 # Select only reports that are written in English
-# TODO: Translate non-english reports
 df_texts$lang <- detect_language(df_texts$text)
 df_texts.en <- df_texts %>% filter(lang=="en") %>% dplyr::select(-c(lang))
-# df_texts.nonen <- df_texts %>% filter(lang!="en")
-
 # TO LONL
 df_texts.en <- df_texts.en %>% separate(text, paste0("page", as.character(1:500)), sep="---PAGE-BREAK---")
 # Transform to long-format: id-link as observation
@@ -517,6 +515,34 @@ df_texts.en.long <- melt(df_texts.en, id.vars=c("id_link_num")) %>%
          page=substr(page, 5, nchar(page)),
          # text=tolower(text), # CHANGE FOR NER <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
          id=substr(id_link_num, 1, (nchar(id_link_num)-2))) 
+
+
+# df_texts.nonen <- df_texts %>% filter(lang!="en")
+# df_texts.nonen <- df_texts.nonen %>% separate(text, paste0("page", as.character(1:500)), sep="---PAGE-BREAK---")
+# # Transform to long-format: id-link as observation
+# df_texts.nonen.long <- melt(df_texts.nonen, id.vars=c("id_link_num")) %>%
+#   filter(!is.na(value)) %>% rename(page=variable, text=value) %>%
+#   mutate(page=as.character(page),
+#          page=substr(page, 5, nchar(page)),
+#          # text=tolower(text), # CHANGE FOR NER <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#          id=substr(id_link_num, 1, (nchar(id_link_num)-2))) 
+# df_texts.nonen.long$lang <- detect_language(df_texts.nonen.long$text)
+# 
+# df_list <- list()
+# unique_langs <- unique(df_texts.nonen.long$lang)
+# for (i in (1:length(unique_langs))){
+#   
+#   df_temp <- df_texts.nonen.long %>% filter(lang==unique_langs[i])
+#   df_temp <- translate(dataset = df_temp,
+#                        content.field = 'text',
+#                        google.api.key = 'AIzaSyCyADH7ABEw5_KB8e_pG2e9Qc6Aa720Jmg',
+#                        source.lang = unique_langs[i],
+#                        target.lang = 'en')
+#   df_list[[i]] <- df_temp
+#   print(unique_langs[i])
+#   
+# }
+
 
 ### NLP part
 # Initilize spacy model
@@ -530,29 +556,27 @@ df_temp <- df_temp %>% left_join(annotation$document %>% dplyr::select(id, doc_i
 annotation$token <- df_temp
 
 ### TODO: Something with Named Entity Recognisition
-
-# Most popular organization?
-t.1 <- annotation$entity %>% filter(entity_type=="ORG") %>%
-  dplyr::select(entity) %>% table() %>% as.data.frame()
-
-# Federal VS. Local level?
-t.2 <- annotation$entity %>% filter(entity_type=="GPE") %>%
-  dplyr::select(entity) %>% table() %>% as.data.frame()
-
-
-
+#  # Most popular organization?
+#  t.1 <- annotation$entity %>% filter(entity_type=="ORG") %>%
+#    dplyr::select(entity) %>% table() %>% as.data.frame()
+#  
+#  # Federal VS. Local level?
+#  t.2 <- annotation$entity %>% filter(entity_type=="GPE") %>%
+#    dplyr::select(entity) %>% table() %>% as.data.frame()
 
 # Remove stopwords and non-alphabetical tokens
 stopwords_vec <- stopwords::stopwords(language = "en",source = "smart")
 stopwords_vec <- c(stopwords_vec, "e.g.", "la")
+
 df_text_preprocessing <- annotation$token %>%
   filter(!(lemma %in% stopwords_vec),
-         !(upos %in% c("DET", "PUNCT")),
+         !(upos %in% c("DET", "PUNCT", "PROPN")),
          (grepl("^[A-Za-z]+$", lemma, perl = T))) %>%
-  dplyr::select(doc_id, lemma) %>%
-  group_by(id) %>%
-  # group_by(doc_id) %>% # PAGE AS THE UNIT OF OBSERVATION <<<<<<<<<<<<<<<<<<<<<<<<
-  summarise_at(vars(lemma), funs(paste(., collapse = ' ')))
+  dplyr::select(doc_id, lemma, id) %>%
+  # group_by(id) %>%
+  group_by(doc_id) %>% # PAGE AS THE UNIT OF OBSERVATION <<<<<<<<<<<<<<<<<<<<<<<<
+  summarise_at(vars(lemma, id), funs(paste(., collapse = ' ')))
+df_text_preprocessing$id <- unlist(lapply(df_text_preprocessing$id, function(x) str_split(x, " ")[[1]][1]))
 
 # Remove pages with low number of characters
 df_text_preprocessing$len <- unlist(lapply(df_text_preprocessing$lemma, nchar))
@@ -562,47 +586,229 @@ df_text_preprocessing <- df_text_preprocessing %>% filter(len>200)
 corpus_q2_0b <- corpus(df_text_preprocessing$lemma,
                       docvars=df_text_preprocessing %>% dplyr::select(-c(lemma)))
 dfm_q2_0b <- tokens(corpus_q2_0b) %>%
-  tokens_ngrams(n = c(1, 2)) %>%
+  tokens_ngrams(n = c(1)) %>%
   dfm() %>%
-  dfm_trim(min_termfreq = 10)
+  dfm_trim(min_termfreq = 20)
 ncol(dfm_q2_0b)
 
 ### 1. STM 
-stm_model <- stm(documents = dfm_q2_0b,
-                 K = 10, max.em.its = 75, init.type = "Spectral")
-labelTopics(stm_model)
-plot(stm_model, type = "summary", n = 5, xlim = c(0,1))
-
-mod.out.corr <- topicCorr(stm_model, cutoff = 0.0000000000001)
+stm_model.1 <- stm(documents = dfm_q2_0b,
+                 K = 0, max.em.its = 75, init.type = "Spectral")
+labelTopics(stm_model.1)
+plot(stm_model.1, type = "summary", n = 5, xlim = c(0,1))
+mod.out.corr <- topicCorr(stm_model.1)
 plot(mod.out.corr)
 
+
 ### 2. Correspondense analysis, Documents position
-tmod_ca <- textmodel_ca(dfm_q2_0b)
-textplot_scale1d(tmod_ca)
-dat_ca <- data.frame(dim1 = coef(tmod_ca, doc_dim = 1)$coef_document, 
-                     dim2 = coef(tmod_ca, doc_dim = 2)$coef_document)
-head(dat_ca)
-plot(1, xlim = c(-2, 2), ylim = c(-2, 2), type = "n", xlab = "Dimension 1", ylab = "Dimension 2")
-grid()
-text(dat_ca$dim1, dat_ca$dim2, labels = rownames(dat_ca), cex = 0.8, col = rgb(0, 0, 0, 0.7))
-
-# 3. LDA, Topics
-tmod_lda <- textmodel_lda(dfm_q2_0b, k = 10)
-terms(tmod_lda, 10)
-
+# tmod_ca <- textmodel_ca(dfm_q2_0b)
+# textplot_scale1d(tmod_ca)
+# dat_ca <- data.frame(dim1 = coef(tmod_ca, doc_dim = 1)$coef_document, 
+#                      dim2 = coef(tmod_ca, doc_dim = 2)$coef_document)
+# head(dat_ca)
+# plot(1, xlim = c(-2, 2), ylim = c(-2, 2), type = "n", xlab = "Dimension 1", ylab = "Dimension 2")
+# grid()
+# text(dat_ca$dim1, dat_ca$dim2, labels = rownames(dat_ca), cex = 0.8, col = rgb(0, 0, 0, 0.7))
+# 
+# # 3. LDA, Topics
+# tmod_lda <- textmodel_lda(dfm_q2_0b, k = 10)
+# terms(tmod_lda, 10)
 
 
 
 ############## Q6.0 : NLP  ####################################################################
 
-# TODO: Looks promising!
+# Looks promising!
 df_q6_0 <- df_cities.20 %>% filter(qstn == "6.0")
+df_q6_0.wide <- dcast(df_q6_0, id + rown ~ coln, value.var="resp")
+df_q6_0.wide <- df_q6_0.wide %>%
+  rename("opportunity"="1", "text"="2") %>%
+  filter(text!="")
 
-df_q6_0.opport <- df_q6_0 %>%
-  filter(colname == "Opportunity")
-sort(table(df_q6_0.opport$resp))
-df_q6_0.descr <- df_q6_0 %>%
-  filter(colname == "Describe how the city is maximizing this opportunity", resp != "")
+### Translation
+# Language of the city
+city_lang <- df_cities.20 %>%
+  filter(qstname == "What language are you submitting your response in?") %>%
+  dplyr::select(id, resp) %>% mutate(resp=dplyr::recode(resp, "Chinese"='zh-CN', "English"="en", "French"="fr",
+                                                        "Korean"="ko", "Other (only applies to free text): italiano"="it",
+                                                        "Portuguese"="pt", "Spanish"="es")) %>%
+  rename(lang=resp)
+
+df_q6_0.wide <- df_q6_0.wide %>% left_join(city_lang)
+df_q6_0.wide.en <- df_q6_0.wide %>% filter(lang=="en")
+df_q6_0.wide.nonen <- df_q6_0.wide %>% filter(lang!="en")
+
+df_list <- list()
+unique_langs <- unique(df_q6_0.wide.nonen$lang)
+for (i in (1:length(unique_langs))){
+  
+  df_temp <- df_q6_0.wide.nonen %>% filter(lang==unique_langs[i])
+  df_temp <- translate(dataset = df_temp,
+                       content.field = 'text',
+                       google.api.key = 'AIzaSyCyADH7ABEw5_KB8e_pG2e9Qc6Aa720Jmg',
+                       source.lang = unique_langs[i],
+                       target.lang = 'en')
+  df_list[[i]] <- df_temp
+  print(unique_langs[i])
+  
+}
+
+df_q6_0.wide.nonen <- do.call(rbind, df_list)
+df_q6_0.wide.nonen <- df_q6_0.wide.nonen %>% 
+  dplyr::select(-c(text)) %>%
+  rename(text=translatedContent)
+df_q6_0.wide <- rbind(df_q6_0.wide.nonen, df_q6_0.wide.en)
+df_q6_0.wide <- df_q6_0.wide %>% dplyr::select(-lang)
+
+# Set the working directory
+setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/nlp_files'))
+saveRDS(df_q6_0.wide, "df_q6_0_wide_2020_translated")
+
+
+############## >>> Q6.2a: Existing cooperation, more narrow view on the areas, and longitudinal ###############
+
+# TODO: Add 2019 and 2198
+
+df_q6_2a <- df_cities.20 %>% filter(qstn == "6.2a")
+df_q6_2a.wide <- dcast(df_q6_2a, id + rown ~ coln, value.var="resp")
+df_q6_2a.wide <- df_q6_2a.wide %>%
+  rename("area"="1", "type"="2", "text"="3") %>%
+  filter(text!="")
+
+### Translation
+# Language of the city
+city_lang <- df_cities.20 %>%
+  filter(qstname == "What language are you submitting your response in?") %>%
+  dplyr::select(id, resp) %>% mutate(resp=dplyr::recode(resp, "Chinese"='zh-CN', "English"="en", "French"="fr",
+                                                        "Korean"="ko", "Other (only applies to free text): italiano"="it",
+                                                        "Portuguese"="pt", "Spanish"="es")) %>%
+  rename(lang=resp)
+
+df_q6_2a.wide <- df_q6_2a.wide %>% left_join(city_lang)
+df_q6_2a.wide.en <- df_q6_2a.wide %>% filter(lang=="en")
+df_q6_2a.wide.nonen <- df_q6_2a.wide %>% filter(lang!="en")
+
+df_list <- list()
+unique_langs <- unique(df_q6_2a.wide.nonen$lang)
+for (i in (1:length(unique_langs))){
+  
+  df_temp <- df_q6_2a.wide.nonen %>% filter(lang==unique_langs[i])
+  df_temp <- translate(dataset = df_temp,
+                       content.field = 'text',
+                       google.api.key = 'AIzaSyCyADH7ABEw5_KB8e_pG2e9Qc6Aa720Jmg',
+                       source.lang = unique_langs[i],
+                       target.lang = 'en')
+  df_list[[i]] <- df_temp
+  print(unique_langs[i])
+  
+}
+
+df_q6_2a.wide.nonen <- do.call(rbind, df_list)
+df_q6_2a.wide.nonen <- df_q6_2a.wide.nonen %>% 
+  dplyr::select(-c(text)) %>%
+  rename(text=translatedContent)
+df_q6_2a.wide <- rbind(df_q6_2a.wide.nonen, df_q6_2a.wide.en)
+df_q6_2a.wide <- df_q6_2a.wide %>% dplyr::select(-lang)
+df_q6_2a.wide <- df_q6_2a.wide %>% filter(text != "Question not applicable")
+
+# Set the working directory
+setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/nlp_files'))
+saveRDS(df_q6_2a.wide, "df_q6_2a_wide_2020_translated")
+
+# NLP preprocessing
+# --- > !!! DIFFERENT CODE FOR KAGGLE NOTEBOOK, see "cdp_draft_r"
+# Initilize spacy model
+cnlp_init_spacy("en_core_web_sm")
+
+# Annotate the text
+annotation <- cnlp_annotate(input = tolower(df_q6_2a.wide$text), verbose = 10)
+df_q6_2a.wide$doc_id <- annotation$document$doc_id
+
+# Remove stopwords and non-alphabetical tokens
+stopwords_vec <- stopwords::stopwords(language = "en",source = "smart")
+stopwords_vec <- c(stopwords_vec, "e.g.", "la")
+df_text_preprocessing <- annotation$token %>%
+  filter(!(lemma %in% stopwords_vec),
+         !(upos %in% c("DET", "PUNCT")),
+         (grepl("^[A-Za-z]+$", lemma, perl = T))) %>%
+  dplyr::select(doc_id, lemma) %>%
+  group_by(doc_id) %>%
+  summarise_at(vars(lemma), funs(paste(., collapse = ' ')))
+df_q6_2a.wide <- df_q6_2a.wide %>% right_join(df_text_preprocessing)
+
+# Remove texts without area
+df_q6_2a.wide <- df_q6_2a.wide %>% filter(area!="")
+sort(table(df_q6_2a.wide$area))
+
+### Preprocessing with quanteda
+corpus_q6_2a <- corpus(df_q6_2a.wide$lemma,
+                       docvars=df_q6_2a.wide %>% dplyr::select(area))
+dfmat_q6_2a <- tokens(corpus_q6_2a) %>%
+  tokens_ngrams(n = c(1)) %>%
+  dfm() %>%
+  dfm_trim(min_termfreq = 10)
+ncol(dfmat_q6_2a)
+nrow(dfmat_q6_2a)
+# Remove documents without vocabulary
+dfmat_q6_2a <- dfmat_q6_2a[rowSums(dfmat_q6_2a) != 0,]
+nrow(dfmat_q6_2a)
+
+### STM
+# ~~ Model 1, K=10
+stm_model.1 <- stm(documents = dfmat_q6_2a,
+                   prevalence =~ area,
+                   data = dfmat_q6_2a@docvars,
+                   K = 10, max.em.its = 75, init.type = "Spectral")
+labelTopics(stm_model.1)
+plot(stm_model.1, type = "summary", xlim = c(0, .5))
+
+prep.1 <- estimateEffect(1:10 ~ area, stm_model.1,
+                         uncertainty = "Global",
+                         meta = dfmat_q6_2a@docvars)
+summary(prep.1, topics=c(1:10))
+
+plot(prep.1, covariate = "area", topics = c(1:10),
+     model = stm_model.1, method = "difference",
+     cov.value1 = "Energy", cov.value2 = "Water",
+     xlab = "Water < ................... > Energy",
+     main = "Topics for Corporations and Cities",
+     xlim = c(-.5, .5),
+     labeltype = "custom")
+
+plot(stm_model.1, type = "perspectives", topics = c(6,3))
+
+# Correlation between topics
+mod.out.corr <- topicCorr(stm_model.1)
+plot(mod.out.corr)
+
+# ~~ Model 2, Search for K
+stm_model.2 <- stm(documents = dfmat_q6_2a,
+                   prevalence =~ area,
+                   data = dfmat_q6_2a@docvars,
+                   K = 0, max.em.its = 175, init.type = "Spectral")
+labelTopics(stm_model.2)
+plot(stm_model.2, type = "summary", xlim = c(0, .3))
+
+prep.2 <- estimateEffect(1:43 ~ area, stm_model.2,
+                         uncertainty = "Global",
+                         meta = dfmat_q6_2a@docvars)
+summary(prep.2, topics=c(1:43))
+
+plot(prep.2, covariate = "area", topics = c(1:43),
+     model = stm_model.2, method = "difference",
+     cov.value1 = "Energy", cov.value2 = "Transport (Mobility)",
+     xlab = "Transport (Mobility) < ................... > Energy",
+     # main = "Topics for Corporations and Cities",
+     xlim = c(-.5, .5),
+     labeltype = "custom")
+
+# Plot topics for Transport (Mobility) area
+labelTopics(stm_model.2, topics = c(21, 13, 15, 16, 2))
+plot(stm_model.2, type = "perspectives", topics = c(13,21))
+
+# Correlation between topics
+mod.out.corr <- topicCorr(stm_model.2)
+plot(mod.out.corr)
 
 
 ############## Q6.5 : NLP ###################################################################################
@@ -617,7 +823,7 @@ currency_rate_usd <- getQuote(paste0(df_currency$currency, rep("USD", nrow(df_cu
 currency_rate_usd <- currency_rate_usd %>%
   dplyr::select(Last) %>% mutate(currency=substr(rownames(currency_rate_usd), 1, 3)) %>%
   rename(curr_rate=Last)
-df_currency <- df_currency %>% left_join(currency_rate_usd) %>% select(-c(currency))
+df_currency <- df_currency %>% left_join(currency_rate_usd) %>% dplyr::select(-c(currency))
 
 ### Main Preprocessing
 df_q6_5 <- df_cities.20 %>% filter(qstn == "6.5")
@@ -703,7 +909,6 @@ head(sort(beta, decreasing = F), 20)
 
 
 
-
 ############## ~~~ CORPORATIONS ~~~ ###################################################################
 
 # Set the working directory
@@ -711,7 +916,7 @@ setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/Corporat
 
 # --- Load the 2020 data
 df_corps.20 <- read.csv('2020_Full_Climate_Change_Dataset.csv') %>% 
-  select('id' = account_number, 'org' = organization, 
+  dplyr::select('id' = account_number, 'org' = organization, 
          'qstn' = question_number, 'qstname' = question_unique_reference,
          'coln' = column_number, 'colname' = column_name,
          'rown' = row_number, 'rowname' = row_name, 'resp' = response_value)
@@ -728,9 +933,7 @@ df_corps.20$resp[grepl("^Other, please specify", as.character(df_corps.20$resp))
 
 ############## Q2.4a: Opportunities #####################################################################
 
-# TODO: Comperehnsive question. A lot can be done here. 
 # Potenial connection to question Q3.2a in Cities.
-
 
 ### Preprocessing
 df_corp_q2_4a <- df_corps.20 %>% filter(qstn == "C2.4a")
@@ -749,8 +952,14 @@ df_corp_q2_4a.wide <- df_corp_q2_4a.wide %>%
          realize_cost_log=log(as.numeric(realize_cost))) %>%
   filter(total_descr!="   ",
          # !(magnitude_impact_bin %in% c("", "Unknown")),
-         !is.na(realize_cost_log),
-         realize_cost_log>0)
+         # !is.na(realize_cost_log),
+         # ealize_cost_log>0
+         )
+
+# Save to RDS
+setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/nlp_files'))
+saveRDS(df_corp_q2_4a.wide, "df_corp_q2_4a_wide_2020")
+
 
 # TODO: Investigate the part about financial figure
 hist(df_corp_q2_4a.wide$realize_cost_log, breaks = 20)
@@ -878,6 +1087,113 @@ mod.out.corr <- topicCorr(stm_model.2)
 plot(mod.out.corr)
 
 
+
+############## >>>> Cooperation between Cities and Corporation #####################################################################
+
+# TODO: Add 2019 and 2018
+
+setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/nlp_files'))
+# Load the data
+df_corp_q2_4a.wide <- readRDS("df_corp_q2_4a_wide_2020")
+df_q6_0.wide <- readRDS("df_q6_0_wide_2020_translated")
+
+# Preprocessing
+df_corp_text <- df_corp_q2_4a.wide %>% dplyr::select(total_descr) %>% rename(text=total_descr) %>%
+  mutate(type="corporation")
+df_city_text <- df_q6_0.wide %>% dplyr::select(text) %>% mutate(type="city")
+df_corp_city_text <- rbind(df_corp_text, df_city_text)
+# df_corp_city_text$id <- as.character(1:nrow(df_corp_city_text))
+
+# NLP preprocessing
+# --- > !!! DIFFERENT CODE FOR KAGGLE NOTEBOOK, see "cdp_draft_r"
+# Initilize spacy model
+cnlp_init_spacy("en_core_web_sm")
+
+# Annotate the text
+annotation <- cnlp_annotate(input = tolower(df_corp_city_text$text), verbose = 10)
+df_corp_city_text$doc_id <- annotation$document$doc_id
+
+# Remove stopwords and non-alphabetical tokens
+stopwords_vec <- stopwords::stopwords(language = "en",source = "smart")
+stopwords_vec <- c(stopwords_vec, "e.g.", "la")
+df_text_preprocessing <- annotation$token %>%
+  filter(!(lemma %in% stopwords_vec),
+         !(upos %in% c("DET", "PUNCT")),
+         (grepl("^[A-Za-z]+$", lemma, perl = T))) %>%
+  dplyr::select(doc_id, lemma) %>%
+  group_by(doc_id) %>%
+  summarise_at(vars(lemma), funs(paste(., collapse = ' ')))
+df_corp_city_text <- df_corp_city_text %>% right_join(df_text_preprocessing)
+
+### Preprocessing with quanteda
+corpus_corp_city <- corpus(df_corp_city_text$lemma,
+                           docvars=df_corp_city_text %>% dplyr::select(type))
+dfmat_corp_city <- tokens(corpus_corp_city) %>%
+  tokens_ngrams(n = c(1)) %>%
+  dfm() %>%
+  dfm_trim(min_termfreq = 10)
+ncol(dfmat_corp_city)
+nrow(dfmat_corp_city)
+# Remove documents without vocabulary
+dfmat_corp_city <- dfmat_corp_city[rowSums(dfmat_corp_city) != 0,]
+nrow(dfmat_corp_city)
+
+### STM
+
+# ~~ Model 1, K=10
+stm_model.1 <- stm(documents = dfmat_corp_city,
+                   prevalence =~ type,
+                   data = dfmat_corp_city@docvars,
+                   K = 10, max.em.its = 75, init.type = "Spectral")
+labelTopics(stm_model.1)
+plot(stm_model.1, type = "summary", xlim = c(0, .5))
+
+prep.1 <- estimateEffect(1:10 ~ type, stm_model.1,
+                       uncertainty = "Global",
+                       meta = dfmat_corp_city@docvars)
+summary(prep.1, topics=c(1:10))
+
+plot(prep.1, covariate = "type", topics = c(1:10),
+     model = stm_model.1, method = "difference",
+     cov.value1 = "corporation", cov.value2 = "city",
+     xlab = "City < ................... > Corporation",
+     main = "Topics for Corporations and Cities",
+     xlim = c(-.5, .5),
+     labeltype = "custom")
+
+plot(stm_model.1, type = "perspectives", topics = c(1,5))
+
+# Correlation between topics
+mod.out.corr <- topicCorr(stm_model.1)
+plot(mod.out.corr)
+
+# ~~ Model 2, Search for K
+stm_model.2 <- stm(documents = dfmat_corp_city,
+                   prevalence =~ type,
+                   data = dfmat_corp_city@docvars,
+                   K = 0, max.em.its = 75, init.type = "Spectral")
+labelTopics(stm_model.2)
+plot(stm_model.2, type = "summary", xlim = c(0, .3))
+
+prep.2 <- estimateEffect(1:70 ~ type, stm_model.2,
+                       uncertainty = "Global",
+                       meta = dfmat_corp_city@docvars)
+summary(prep.2, topics=c(1:70))
+
+plot(prep.2, covariate = "type", topics = c(1:70),
+     model = stm_model.2, method = "difference",
+     cov.value1 = "corporation", cov.value2 = "city",
+     xlab = "City < ................... > Corporation",
+     main = "Topics for Corporations and Cities",
+     xlim = c(-.1, .1),
+     labeltype = "custom")
+labelTopics(stm_model.2, topics = c(70, 59, 41, 32, 14, 1))
+
+plot(stm_model.1, type = "perspectives", topics = c(1,5))
+
+# Correlation between topics
+mod.out.corr <- topicCorr(stm_model.2)
+plot(mod.out.corr)
 
 
 ################################## TODO ##############################################
