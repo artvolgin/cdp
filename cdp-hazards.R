@@ -177,6 +177,28 @@ no2_raster <- raster("NO2_sum.tif") # COPERNICUS/S5P/OFFL/L3_NO2, NO2_column_num
 df_cities_info$no2_sum <- raster::extract(no2_raster, df_cities_info)
 
 
+# --- 7. Cities Population, 2020
+
+# df_q0_1 <- df_cities.20 %>% filter(qstn == "0.1", coln == 1) %>% dplyr::select(org, resp)
+# t <- as.data.frame(table(df_q0_1$resp))
+
+# setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
+# export(df_q0_5, "df_q0_5.coded.xlsx", "xlsx")
+
+# df_q0_5 <- df_cities.20 %>% filter(qstn == "0.5", coln == 1) %>% dplyr::select(id, org, resp) %>%
+#   mutate(resp=as.numeric(resp))
+# 
+# df_q0_5[df_q0_5$id == "841098",]$resp <- 338000
+# df_q0_5[df_q0_5$id == "60318",]$resp <- 494000
+# df_q0_5[df_q0_5$id == "54652",]$resp <- 676000
+# df_q0_5[df_q0_5$id == "839650",]$resp <- 124100
+# df_q0_5[df_q0_5$id == "826381",]$resp <- 4412000
+# df_q0_5[df_q0_5$id == "841003",]$resp <- 524700
+# df_q0_5[df_q0_5$id == "826211",]$resp <- 399724
+# df_q0_5[df_q0_5$id == "42388",]$resp <- 1383432
+# df_q0_5[df_q0_5$id == "845309",]$resp <- 329675
+
+
 #############################################################################################################
 ############## Preprocessing
 #############################################################################################################

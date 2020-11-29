@@ -72,6 +72,7 @@ df_cities.19$colname <- temp_vec
 df_cities.19$resp[grepl("^Other:", as.character(df_cities.19$resp))] <- "Other"
 
 
+
 ############## ~~~ CITIES ~~~ ###################################################################
 
 ############## Q2.2: NLP ##################################################################################
@@ -167,7 +168,9 @@ beta <- lasso$beta[, index_best]
 head(sort(beta, decreasing = T), 10)
 head(sort(beta, decreasing = F), 10)
 
-############## >>>>> Q2.0b, Q3.0, Q5.5a : NLP, 2020 #########################################################################
+
+
+############## >>>>> Q2.0b - 2020 #########################################################################
 
 # TODO:
 # 1. Look for .pdf files in the page, TOO COMLICATED
@@ -281,22 +284,9 @@ stm_model <- stm(documents = dfm_q2_0b,
 labelTopics(stm_model)
 plot(stm_model, type = "summary")
 
-### 2. Correspondense analysis, Documents position
-tmod_ca <- textmodel_ca(dfm_q2_0b)
-textplot_scale1d(tmod_ca)
-dat_ca <- data.frame(dim1 = coef(tmod_ca, doc_dim = 1)$coef_document, 
-                     dim2 = coef(tmod_ca, doc_dim = 2)$coef_document)
-head(dat_ca)
-plot(1, xlim = c(-2, 2), ylim = c(-2, 2), type = "n", xlab = "Dimension 1", ylab = "Dimension 2")
-grid()
-text(dat_ca$dim1, dat_ca$dim2, labels = rownames(dat_ca), cex = 0.8, col = rgb(0, 0, 0, 0.7))
-
-# 3. LDA, Topics
-tmod_lda <- textmodel_lda(dfm_q2_0b, k = 10)
-terms(tmod_lda, 10)
 
 
-### --------- Q3.0 
+############### >>>>> Q3.0 - 2020 #########################################################################
 
 ### NEW
 df_q3_0 <- df_cities.20 %>% filter(qstn == "3.0")
@@ -369,7 +359,6 @@ df_texts.en.long <- melt(df_texts.en, id.vars=c("id")) %>%
   mutate(page=as.character(page),
          page=substr(page, 5, nchar(page)))
 
-# TODO: FIX LATER
 # REMOVE LONG PAGE
 df_texts.en.long$len <- unlist(lapply(df_texts.en.long$text, nchar))
 df_texts.en.long <- df_texts.en.long %>% filter(len<1e6)
@@ -390,7 +379,7 @@ stopwords_vec <- stopwords::stopwords(language = "en",source = "smart")
 stopwords_vec <- c(stopwords_vec, "e.g.", "la")
 df_text_preprocessing <- annotation$token %>%
   filter(!(lemma %in% stopwords_vec),
-         !(upos %in% c("DET", "PUNCT")),
+         !(upos %in% c("DET", "PUNCT", "PROPN")),
          (grepl("^[A-Za-z]+$", lemma, perl = T))) %>%
   dplyr::select(id, lemma) %>%
   group_by(id) %>%
@@ -400,52 +389,30 @@ df_text_preprocessing <- annotation$token %>%
 corpus_q3_0 <- corpus(df_text_preprocessing$lemma,
                        docvars=df_text_preprocessing %>% dplyr::select(-c(lemma)))
 dfm_q3_0 <- tokens(corpus_q3_0) %>%
-  tokens_ngrams(n = c(1)) %>%
+  tokens_ngrams(n = c(1, 2)) %>%
   dfm() %>%
-  dfm_trim(min_termfreq = 10)
+  dfm_trim(min_termfreq = 20)
 ncol(dfm_q3_0)
+nrow(dfm_q3_0)
 
-### 1. STM 
-stm_model <- stm(documents = dfm_q3_0,
-                 K = 5, max.em.its = 75, init.type = "Spectral")
-labelTopics(stm_model)
-plot(stm_model, type = "summary")
+# Hierarchical clustering
+tstat_dist <- as.dist(textstat_dist(dfm_q3_0))
+clust <- hclust(tstat_dist, method = "ward.D")
+plot(clust, xlab = "Distance", ylab = NULL)
+dfm_q3_0@docvars$cluster <- cutree(clust, k = 2)
 
-### 2. Correspondense analysis, Documents position
-tmod_ca <- textmodel_ca(dfm_q2_0b)
-textplot_scale1d(tmod_ca)
-dat_ca <- data.frame(dim1 = coef(tmod_ca, doc_dim = 1)$coef_document, 
-                     dim2 = coef(tmod_ca, doc_dim = 2)$coef_document)
-head(dat_ca)
-plot(1, xlim = c(-2, 2), ylim = c(-2, 2), type = "n", xlab = "Dimension 1", ylab = "Dimension 2")
-grid()
-text(dat_ca$dim1, dat_ca$dim2, labels = rownames(dat_ca), cex = 0.8, col = rgb(0, 0, 0, 0.7))
+set.seed(132)
+dfm_q3_0_grouped <- dfm(dfm_q3_0,  groups = "cluster")
+# dev.new(width = 1000, height = 1000, unit = "px")
+textplot_wordcloud(dfm_q3_0_grouped, comparison = T, max_words = 50, ordered_color=T,
+                   color=c("forestgreen", "red"), fixed_aspect=T, min_size = 1, max_size = 3)
 
 
 
-### --------- Q5.5a
-# TODO
-
-df_q5_5a <- df_cities.20 %>% filter(qstn == "5.5a")
-df_q5_5a.link <- df_q5_5a %>%
-  filter(colname == "Web link",
-         !(resp %in% c("Question not applicable", ""))) %>%
-  dplyr::select(id, resp)
-# Extract the links
-temp_vec <- sapply(df_q5_5a.link$resp, function(x) str_extract_all(x, "(?<=^|\\s)http[^\\s]+"))
-temp_vec <- as.data.frame(sapply(temp_vec, function(x) paste(x, collapse = ' ')))
-df_q5_5a.link$resp <- temp_vec[,1]
-df_q5_5a.link <- df_q5_5a.link %>% filter(resp!="")
-df_q5_5a.link <- df_q5_5a.link %>% separate(resp, paste0("link", as.character(1:9)),
-                                          sep=" ")
-df_q5_5a.link <- df_q5_5a.link[,colSums(is.na(df_q5_5a.link)) != nrow(df_q5_5a.link)]
-
-
-
-############## >>>>> Q2.0b, Q3.0, Q5.5a : PDF DOCUMENTS, 2019 ################################################################
+############## >>>>> Q2.0b - 2019 ################################################################
 
 # TODO:
-# 1. Add Categorical variables to STM
+# 1. Add Categorical variables to STM, Year of publication/Adoption, VUNERABLE POPULATIONS
 # 2. Combine Reports from 2018 and 2019
 
 
@@ -471,18 +438,18 @@ df_q2_0b.link.long <- melt(df_q2_0b.link, id.vars=c("id")) %>%
          id_link_num=paste(id, link_num, sep="_"))
 
 ### Download reports
-setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/2019/q2_0b")
-oldw <- getOption("warn")
-options(warn = -1)
-for (i in (1:nrow(df_q2_0b.link.long))) {
-  tryCatch(download.file(df_q2_0b.link.long$link[i],
-                         destfile = paste0(df_q2_0b.link.long$id_link_num[i], ".pdf"),
-                         mode = "wb", quiet = T), 
-           error = function(e) print(paste(as.character(i), ' error ~~~~~')))
-  print(i)
-  Sys.sleep(0.5)
-}
-options(warn = oldw)
+#setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/2019/q2_0b")
+#oldw <- getOption("warn")
+#options(warn = -1)
+#for (i in (1:nrow(df_q2_0b.link.long))) {
+#  tryCatch(download.file(df_q2_0b.link.long$link[i],
+#                         destfile = paste0(df_q2_0b.link.long$id_link_num[i], ".pdf"),
+#                         mode = "wb", quiet = T), 
+#           error = function(e) print(paste(as.character(i), ' error ~~~~~')))
+#  print(i)
+#  Sys.sleep(0.5)
+#}
+#options(warn = oldw)
 
 ### Load the data from separate pdfs
 setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/2019/q2_0b")
@@ -517,33 +484,6 @@ df_texts.en.long <- melt(df_texts.en, id.vars=c("id_link_num")) %>%
          id=substr(id_link_num, 1, (nchar(id_link_num)-2))) 
 
 
-# df_texts.nonen <- df_texts %>% filter(lang!="en")
-# df_texts.nonen <- df_texts.nonen %>% separate(text, paste0("page", as.character(1:500)), sep="---PAGE-BREAK---")
-# # Transform to long-format: id-link as observation
-# df_texts.nonen.long <- melt(df_texts.nonen, id.vars=c("id_link_num")) %>%
-#   filter(!is.na(value)) %>% rename(page=variable, text=value) %>%
-#   mutate(page=as.character(page),
-#          page=substr(page, 5, nchar(page)),
-#          # text=tolower(text), # CHANGE FOR NER <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-#          id=substr(id_link_num, 1, (nchar(id_link_num)-2))) 
-# df_texts.nonen.long$lang <- detect_language(df_texts.nonen.long$text)
-# 
-# df_list <- list()
-# unique_langs <- unique(df_texts.nonen.long$lang)
-# for (i in (1:length(unique_langs))){
-#   
-#   df_temp <- df_texts.nonen.long %>% filter(lang==unique_langs[i])
-#   df_temp <- translate(dataset = df_temp,
-#                        content.field = 'text',
-#                        google.api.key = 'AIzaSyCyADH7ABEw5_KB8e_pG2e9Qc6Aa720Jmg',
-#                        source.lang = unique_langs[i],
-#                        target.lang = 'en')
-#   df_list[[i]] <- df_temp
-#   print(unique_langs[i])
-#   
-# }
-
-
 ### NLP part
 # Initilize spacy model
 cnlp_init_spacy("en_core_web_sm")
@@ -554,15 +494,6 @@ annotation <- cnlp_annotate(input = df_texts.en.long, verbose = 10)
 df_temp <- annotation$token
 df_temp <- df_temp %>% left_join(annotation$document %>% dplyr::select(id, doc_id))
 annotation$token <- df_temp
-
-### TODO: Something with Named Entity Recognisition
-#  # Most popular organization?
-#  t.1 <- annotation$entity %>% filter(entity_type=="ORG") %>%
-#    dplyr::select(entity) %>% table() %>% as.data.frame()
-#  
-#  # Federal VS. Local level?
-#  t.2 <- annotation$entity %>% filter(entity_type=="GPE") %>%
-#    dplyr::select(entity) %>% table() %>% as.data.frame()
 
 # Remove stopwords and non-alphabetical tokens
 stopwords_vec <- stopwords::stopwords(language = "en",source = "smart")
@@ -582,6 +513,31 @@ df_text_preprocessing$id <- unlist(lapply(df_text_preprocessing$id, function(x) 
 df_text_preprocessing$len <- unlist(lapply(df_text_preprocessing$lemma, nchar))
 df_text_preprocessing <- df_text_preprocessing %>% filter(len>200)
 
+# Save the preprocessed file
+setwd("C:/Users/Artem/YandexDisk/CDP/data/nlp_files")
+# saveRDS(df_text_preprocessing, "df_text_preprocessing_q2_0b_2019")
+df_text_preprocessing <- readRDS("df_text_preprocessing_q2_0b_2019")
+
+# Add categorical variables to text
+df_q2_0b.vuln <- df_q2_0b %>% dplyr::filter(coln == 8, resp != "") %>% dplyr::select(id, resp) %>%
+  mutate(id=as.character(id)) %>% rename(vulnerable_population=resp)
+df_q2_0b.year <- df_q2_0b %>% dplyr::filter(coln == 2, resp != "") %>% dplyr::select(id, resp) %>%
+  mutate(id=as.character(id)) %>% rename(adoption_year=resp)
+df_text_preprocessing <- df_text_preprocessing%>% data.frame() %>% 
+  left_join(df_q2_0b.year, by="id") %>%
+  left_join(df_q2_0b.vuln, by="id") %>%
+  distinct(doc_id, .keep_all = T)
+df_text_preprocessing <- df_text_preprocessing %>%
+  mutate(adoption_year=ifelse(adoption_year %in% c("2016", "2017", "2018", "2019"),
+                              adoption_year, "2015 and earlier"),
+         adoption_year=dplyr::recode(adoption_year,
+                                     "2016"="2016-2017",
+                                     "2017"="2016-2017",
+                                     "2018"="2018-2019",
+                                     "2019"="2018-2019"))
+# Remove documents with missing categorical variables
+df_text_preprocessing <- df_text_preprocessing %>% filter(!is.na(vulnerable_population))
+
 # Create Corpus and Document term matrix
 corpus_q2_0b <- corpus(df_text_preprocessing$lemma,
                       docvars=df_text_preprocessing %>% dplyr::select(-c(lemma)))
@@ -591,28 +547,467 @@ dfm_q2_0b <- tokens(corpus_q2_0b) %>%
   dfm_trim(min_termfreq = 20)
 ncol(dfm_q2_0b)
 
-### 1. STM 
+### --- STM 
+
+# Model 1. Base
 stm_model.1 <- stm(documents = dfm_q2_0b,
-                 K = 0, max.em.its = 75, init.type = "Spectral")
+                 K = 0, max.em.its = 25, init.type = "Spectral")
 labelTopics(stm_model.1)
 plot(stm_model.1, type = "summary", n = 5, xlim = c(0,1))
 mod.out.corr <- topicCorr(stm_model.1)
 plot(mod.out.corr)
 
+# Model 2. Base + Categorical variables
+stm_model.2 <- stm(documents = dfm_q2_0b,
+                   prevalence =~ vulnerable_population + adoption_year,
+                   K = 0, max.em.its = 25, init.type = "Spectral")
+topics_number <- 66
+labelTopics(stm_model.2)
+plot(stm_model.2, type = "summary", n = 5, xlim = c(0,1))
+mod.out.corr <- topicCorr(stm_model.2)
+plot(mod.out.corr)
 
-### 2. Correspondense analysis, Documents position
-# tmod_ca <- textmodel_ca(dfm_q2_0b)
-# textplot_scale1d(tmod_ca)
-# dat_ca <- data.frame(dim1 = coef(tmod_ca, doc_dim = 1)$coef_document, 
-#                      dim2 = coef(tmod_ca, doc_dim = 2)$coef_document)
-# head(dat_ca)
-# plot(1, xlim = c(-2, 2), ylim = c(-2, 2), type = "n", xlab = "Dimension 1", ylab = "Dimension 2")
-# grid()
-# text(dat_ca$dim1, dat_ca$dim2, labels = rownames(dat_ca), cex = 0.8, col = rgb(0, 0, 0, 0.7))
-# 
-# # 3. LDA, Topics
-# tmod_lda <- textmodel_lda(dfm_q2_0b, k = 10)
-# terms(tmod_lda, 10)
+
+# Estimate the effect of adoption_year on topics
+prep.1 <- estimateEffect(1:topics_number ~ adoption_year, stm_model.2,
+                         uncertainty = "Global",
+                         meta = dfm_q2_0b@docvars)
+summary(prep.1, topics=c(1:5))
+plot(prep.1, covariate = "adoption_year", topics = c(1:topics_number),
+     model = stm_model.2, method = "difference",
+     cov.value1 = "2018-2019", cov.value2 = "2015 and earlier",
+     xlab = "2015 and earlier < ................... > 2018-2019",
+     main = "Topics for Based on the years",
+     xlim = c(-.1, .1),
+     labeltype = "custom")
+labelTopics(stm_model.2, topics = c(4, 12)) # 2018-2019
+labelTopics(stm_model.2, topics = c(52, 15, 6)) # 201 and earlier
+
+
+# Estimate the effect of vulnerable_population on topics
+prep.2 <- estimateEffect(1:topics_number ~ vulnerable_population, stm_model.2,
+                         uncertainty = "Global",
+                         meta = dfm_q2_0b@docvars)
+summary(prep.2, topics=c(1:5))
+plot(prep.2, covariate = "vulnerable_population", topics = c(1:topics_number),
+     model = stm_model.2, method = "difference",
+     cov.value1 = "Yes", cov.value2 = "No",
+     xlab = "No Vulnerable Population < ................... > Yes Vulnerable Population",
+     main = "Topics for Vulnerable Population",
+     xlim = c(-.1, .1),
+     labeltype = "custom")
+labelTopics(stm_model.2, topics = c(6, 14, 24))
+
+
+
+
+
+
+############## >>>>> # Q2.0b 2019, 2020 ################################################################
+
+# TODO:
+# 1. Add Categorical variables to STM, Year of publication/Adoption, VUNERABLE POPULATIONS
+# 2. Combine Reports from 2018 and 2019
+# 3. Split by pages and than use  id as a categorical variable?
+# 4. Clustering of pages?
+# 5. Primary author of assessment
+
+### Load the data from separate pdfs ------------- 2019
+setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/2019/q2_0b")
+pdf_files <- list.files(pattern = "pdf$")
+oldw <- getOption("warn")
+options(warn = -1)
+pdf_texts <- list()
+for (i in (1:length(pdf_files))) {
+  tryCatch(pdf_texts[[i]] <- pdf_text(pdf_files[i]), 
+           error = function(e) print(paste(as.character(i), ' error ~~~~~')))
+  print(i)
+  # Sys.sleep(1)
+}
+pdf_files <- pdf_files[!unlist(lapply(pdf_texts, is.null))]
+pdf_texts <- pdf_texts[!unlist(lapply(pdf_texts, is.null))]
+
+df_texts <- as.data.frame(sapply(pdf_texts, function(x) paste(x, collapse = '---PAGE-BREAK---'))) # ---PAGE-BREAK---
+colnames(df_texts) <- "text"
+df_texts$id_link_num <- substr(pdf_files, 1, (nchar(pdf_files)-4))
+
+# Select only reports that are written in English
+df_texts$lang <- detect_language(df_texts$text)
+df_texts.en.2019 <- df_texts %>% filter(lang=="en") %>% dplyr::select(-c(lang))
+df_texts.en.2019$year <- "2019"
+
+### Load the data from separate pdfs ------------- 2020
+setwd("C:/Users/Artem/YandexDisk/CDP/data/ParsedReports/2020/q2_0b")
+pdf_files <- list.files(pattern = "pdf$")
+oldw <- getOption("warn")
+options(warn = -1)
+pdf_texts <- list()
+for (i in (1:length(pdf_files))) {
+  tryCatch(pdf_texts[[i]] <- pdf_text(pdf_files[i]), 
+           error = function(e) print(paste(as.character(i), ' error ~~~~~')))
+  print(i)
+  # Sys.sleep(1)
+}
+pdf_files <- pdf_files[!unlist(lapply(pdf_texts, is.null))]
+pdf_texts <- pdf_texts[!unlist(lapply(pdf_texts, is.null))]
+
+df_texts <- as.data.frame(sapply(pdf_texts, function(x) paste(x, collapse = '---PAGE-BREAK---'))) # ---PAGE-BREAK---
+colnames(df_texts) <- "text"
+df_texts$id_link_num <- substr(pdf_files, 1, (nchar(pdf_files)-4))
+
+# Select only reports that are written in English
+df_texts$lang <- detect_language(df_texts$text)
+df_texts.en.2020 <- df_texts %>% filter(lang=="en") %>% dplyr::select(-c(lang))
+df_texts.en.2020$year <- "2020"
+
+
+# Merge together ------------- 2020 & 2019
+df_texts.en <- rbind(df_texts.en.2019, df_texts.en.2020)
+df_texts.en <- df_texts.en %>% distinct(text, .keep_all = T)
+df_texts.en <- df_texts.en %>%
+  mutate(id_link_num=substr(id_link_num, 1, (nchar(id_link_num)-2)),
+         id=paste(id_link_num, year, sep  = "_")) %>%
+  dplyr::select(-c(id_link_num))
+
+# TO LONL
+df_texts.en <- df_texts.en %>% separate(text, paste0("page", as.character(1:500)), sep="---PAGE-BREAK---")
+# Transform to long-format: id-link as observation
+df_texts.en.long <- melt(df_texts.en, id.vars=c("id")) %>%
+  filter(!is.na(value)) %>% rename(page=variable, text=value) %>%
+  mutate(page=as.character(page),
+         page=substr(page, 5, nchar(page)),
+         # text=tolower(text), # CHANGE FOR NER <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+         ) 
+
+### NLP part
+# Initilize spacy model
+cnlp_init_spacy("en_core_web_sm")
+
+# Annotate the text
+annotation <- cnlp_annotate(input = df_texts.en.long, verbose = 100)
+# Add City ID
+df_temp <- annotation$token
+df_temp <- df_temp %>% left_join(annotation$document %>% dplyr::select(id, doc_id))
+annotation$token <- df_temp
+# Save the preprocessed file
+setwd("C:/Users/Artem/YandexDisk/CDP/data/nlp_files")
+# saveRDS(annotation, "annotation_q2_0b_2019_2020")
+
+# Remove stopwords and non-alphabetical tokens
+stopwords_vec <- stopwords::stopwords(language = "en",source = "smart")
+stopwords_vec <- c(stopwords_vec, "e.g.", "la")
+df_text_preprocessing <- annotation$token %>%
+  filter(!(lemma %in% stopwords_vec),
+         !(upos %in% c("DET", "PUNCT", "PROPN")),
+         (grepl("^[A-Za-z]+$", lemma, perl = T))) %>%
+  dplyr::select(doc_id, id, lemma) %>%
+  group_by(id) %>% # <<<<<<<<<<<<<<<<<<<<<<<<< BY CITY
+  # group_by(doc_id) %>% # <<<<<<<<<<<<<<<<<<<<<<<<< BY PAGE
+  summarise_at(vars(lemma), funs(paste(., collapse = ' '))) # add id to vars
+# df_text_preprocessing$id <- unlist(lapply(df_text_preprocessing$id, function(x) str_split(x, " ")[[1]][1]))
+
+
+# saveRDS(df_text_preprocessing, "df_text_preprocessing_q2_0b_2019_2020_obscities")
+# saveRDS(df_text_preprocessing, "df_text_preprocessing_q2_0b_2019_2020_obspages")
+
+### --- STM ----------------------------------------------------------------------
+
+# Save the preprocessed file
+setwd("C:/Users/Artem/YandexDisk/CDP/data/nlp_files")
+df_text_preprocessing <- readRDS("df_text_preprocessing_q2_0b_2019_2020_obscities")
+df_text_preprocessing <- readRDS("df_text_preprocessing_q2_0b_2019_2020_obspages")
+
+# Add categorical variables to text
+df_q2_0b <- df_cities.20 %>% filter(qstn == "2.0b")
+df_q2_0b.vuln <- df_q2_0b %>% dplyr::filter(coln == 7, resp != "") %>% dplyr::select(id, resp) %>%
+  mutate(id=as.character(id)) %>% rename(vulnerable_population=resp)
+df_q2_0b.year <- df_q2_0b %>% dplyr::filter(coln == 3, resp != "") %>% dplyr::select(id, resp) %>%
+  mutate(id=as.character(id)) %>% rename(adoption_year=resp)
+df_text_preprocessing <- df_text_preprocessing %>% data.frame() %>% 
+  left_join(df_q2_0b.year, by="id") %>%
+  left_join(df_q2_0b.vuln, by="id") %>%
+  distinct(doc_id,  .keep_all = T)
+
+# Remove documents with missing categorical variables
+df_text_preprocessing <- df_text_preprocessing %>% filter(!is.na(adoption_year))
+df_text_preprocessing <- df_text_preprocessing %>%
+  mutate(adoption_year=ifelse(adoption_year %in% c("2016", "2017", "2018", "2019"),
+                              adoption_year, "2015 and earlier"),
+         adoption_year=dplyr::recode(adoption_year,
+                                     "2016"="2016-2017",
+                                     "2017"="2016-2017",
+                                     "2018"="2018-2019",
+                                     "2019"="2018-2019"))
+df_text_preprocessing <- df_text_preprocessing %>%
+  mutate(vulnerable_population = vulnerable_population %>% replace_na("No"))
+
+# Remove pages with low number of characters
+df_text_preprocessing$len <- unlist(lapply(df_text_preprocessing$lemma, nchar))
+df_text_preprocessing <- df_text_preprocessing %>% filter(len>200)
+
+# Create Corpus and Document term matrix
+corpus_q2_0b <- corpus(df_text_preprocessing$lemma,
+                       docvars=df_text_preprocessing %>% dplyr::select(-c(lemma)))
+dfm_q2_0b <- tokens(corpus_q2_0b) %>%
+  tokens_ngrams(n = c(1)) %>%
+  dfm() %>%
+  dfm_trim(min_termfreq = 20)
+ncol(dfm_q2_0b)
+nrow(dfm_q2_0b)
+
+
+# Model 0. Base <<<<<<<<<<<<<<<<<<<<<<<< OK with k = 75
+stm_model.0 <- stm(documents = dfm_q2_0b,
+                   K = 0, max.em.its = 50, init.type = "Spectral") # K = 75
+topics_number <- 75
+labelTopics(stm_model.0)
+plot(stm_model.0, type = "summary", n = 5, xlim = c(0,1))
+mod.out.corr <- topicCorr(stm_model.0)
+plot(mod.out.corr)
+
+# Model 1. Base + Categorical variables
+K <- 50
+stm_model.1 <- stm(documents = dfm_q2_0b,
+                   prevalence =~ vulnerable_population + adoption_year,
+                   K = K, max.em.its = 50, init.type = "Spectral")
+labelTopics(stm_model.1)
+plot(stm_model.1, type = "summary", n = 5, xlim = c(0,1))
+mod.out.corr <- topicCorr(stm_model.1)
+plot(mod.out.corr)
+
+# Estimate the effect of adoption_year on topics
+prep.1 <- estimateEffect(1:K ~ adoption_year, stm_model.1,
+                         uncertainty = "Global",
+                         meta = dfm_q2_0b@docvars)
+summary(prep.1, topics=c(1:K))
+plot(prep.1, covariate = "adoption_year", topics = c(1:K),
+     model = stm_model.1, method = "difference",
+     cov.value1 = "2018-2019", cov.value2 = "2015 and earlier",
+     xlab = "2015 and earlier < ................... > 2018-2019",
+     main = "Topics for Based on the years",
+     xlim = c(-.1, .1),
+     labeltype = "custom")
+labelTopics(stm_model.1, topics = c(14, 9, 3)) # 2018-2019
+labelTopics(stm_model.1, topics = c(17)) # 2015 and earlier
+
+# Estimate the effect of vulnerable_population on topics
+prep.2 <- estimateEffect(1:K ~ vulnerable_population, stm_model.1,
+                         uncertainty = "Global",
+                         meta = dfm_q2_0b@docvars)
+summary(prep.2, topics=c(1:K))
+plot(prep.2, covariate = "vulnerable_population", topics = c(1:K),
+     model = stm_model.1, method = "difference",
+     cov.value1 = "Yes", cov.value2 = "No",
+     xlab = "No Vulnerable Population < ................... > Yes Vulnerable Population",
+     main = "Topics for Vulnerable Population",
+     xlim = c(-.2, .2),
+     labeltype = "custom")
+labelTopics(stm_model.1, topics = c(17, 15))
+
+
+### --- CLUSTERING ----------------------------------------------------------------------
+
+# Save the preprocessed file
+setwd("C:/Users/Artem/YandexDisk/CDP/data/nlp_files")
+df_text_preprocessing <- readRDS("df_text_preprocessing_q2_0b_2019_2020_obscities")
+
+# Create Corpus and Document term matrix
+corpus_q2_0b <- corpus(df_text_preprocessing$lemma,
+                       docvars=df_text_preprocessing %>% dplyr::select(-c(lemma)))
+dfm_q2_0b <- tokens(corpus_q2_0b) %>%
+  tokens_ngrams(n = c(1, 2, 3)) %>%
+  dfm() %>%
+  dfm_trim(min_termfreq = 20)
+ncol(dfm_q2_0b)
+nrow(dfm_q2_0b)
+
+# Hierarchical clustering
+tstat_dist <- as.dist(textstat_dist(dfm_q2_0b))
+clust <- hclust(tstat_dist, method = "ward.D")
+plot(clust, xlab = "Distance", ylab = NULL)
+dfm_q2_0b@docvars$cluster <- cutree(clust, k = 3)
+
+set.seed(132)
+textplot_wordcloud(dfm_q2_0b, max_words = 100)
+textplot_wordcloud(dfm_q2_0b[dfm_q2_0b$cluster == 1,], max_words = 100)
+textplot_wordcloud(dfm_q2_0b[dfm_q2_0b$cluster == 2,], max_words = 100)
+textplot_wordcloud(dfm_q2_0b[dfm_q2_0b$cluster == 3,], max_words = 100)
+
+
+dfm_q2_0b_grouped <- dfm(dfm_q2_0b,  groups = "cluster")
+# dev.new(width = 1000, height = 1000, unit = "px")
+textplot_wordcloud(dfm_q2_0b_grouped, comparison = T, max_words = 100, ordered_color=T,
+                   color=c("black", "forestgreen", "red"), fixed_aspect=T, min_size = 1, max_size = 2)
+
+# dfm_q2_0b_grouped <- dfm(dfm_q2_0b,  groups = "author")
+# # dev.new(width = 1000, height = 1000, unit = "px")
+# textplot_wordcloud(dfm_q2_0b_grouped, comparison = T, max_words = 100, ordered_color=T,
+#                    color=c("forestgreen", "red"), fixed_aspect=T, min_size = 0.5)
+
+
+### --- LEXICAL DIVERSITY ----------------------------------------------------------------------
+
+# Save the preprocessed file
+setwd("C:/Users/Artem/YandexDisk/CDP/data/nlp_files")
+df_text_preprocessing <- readRDS("df_text_preprocessing_q2_0b_2019_2020_obscities")
+
+tstat_lexdiv <- textstat_lexdiv(dfm_q2_0b, "all")
+
+# TTR
+# ggplot(tstat_lexdiv, aes(x = reorder(document, TTR),
+#                          y = TTR)) + 
+#   geom_point(size=2, color=adjustcolor("brown2", alpha.f = 0.8)) +
+#   coord_flip() + theme_minimal()
+
+# Carroll's Corrected TTR
+ggplot(tstat_lexdiv, aes(x = reorder(document, -CTTR),
+                         y = CTTR)) + 
+  geom_point(size=2, color=adjustcolor("brown2", alpha.f = 0.8)) +
+  coord_flip() + theme_minimal()
+
+
+### --- RELATIVE FREQUENCY ANALYSIS ------------------------------------------------------------
+
+# Load the preprocessed file
+setwd("C:/Users/Artem/YandexDisk/CDP/data/nlp_files")
+df_text_preprocessing <- readRDS("df_text_preprocessing_q2_0b_2019_2020_obscities")
+
+# Add categorical variables to text
+# 2020
+df_q2_0b.20 <- df_cities.20 %>% filter(qstn == "2.0b")
+df_q2_0b.vuln.20 <- df_q2_0b.20 %>% dplyr::filter(coln == 7, rown==1, resp != "") %>% dplyr::select(id, resp) %>%
+  mutate(id=paste0(as.character(id), "_2020")) %>% rename(vulnerable_population=resp)
+df_q2_0b.year.20 <- df_q2_0b.20 %>% dplyr::filter(coln == 3, rown==1, resp != "") %>% dplyr::select(id, resp) %>%
+  mutate(id=paste0(as.character(id), "_2020")) %>% rename(adoption_year=resp)
+df_q2_0b.author.20 <- df_q2_0b.20 %>% dplyr::filter(coln == 6, rown==1, resp != "") %>% dplyr::select(id, resp) %>%
+  mutate(id=paste0(as.character(id), "_2020")) %>% rename(author=resp)
+# 2019
+df_q2_0b.19 <- df_cities.19 %>% filter(qstn == "2.0b")
+df_q2_0b.vuln.19 <- df_q2_0b.19 %>% dplyr::filter(coln == 8, rown==1, resp != "") %>% dplyr::select(id, resp) %>%
+  mutate(id=paste0(as.character(id), "_2019")) %>% rename(vulnerable_population=resp)
+df_q2_0b.year.19 <- df_q2_0b.19 %>% dplyr::filter(coln == 2, rown==1, resp != "") %>% dplyr::select(id, resp) %>%
+  mutate(id=paste0(as.character(id), "_2019")) %>% rename(adoption_year=resp)
+df_q2_0b.author.19 <- df_q2_0b.19 %>% dplyr::filter(coln == 7, rown==1, resp != "") %>% dplyr::select(id, resp) %>%
+  mutate(id=paste0(as.character(id), "_2019")) %>% rename(author=resp)
+# Merge
+df_q2_0b.year <- rbind(df_q2_0b.year.19, df_q2_0b.year.20)
+df_q2_0b.vuln <- rbind(df_q2_0b.vuln.19, df_q2_0b.vuln.20)
+df_q2_0b.author <- rbind(df_q2_0b.author.19, df_q2_0b.author.20)
+# Add to the dataset
+df_text_preprocessing <- df_text_preprocessing %>% data.frame() %>% 
+  left_join(df_q2_0b.year, by="id") %>%
+  left_join(df_q2_0b.vuln, by="id") %>%
+  left_join(df_q2_0b.author, by="id")
+
+# adoption_year preprocessing
+df_text_preprocessing <- df_text_preprocessing %>% filter(!is.na(adoption_year))
+df_text_preprocessing <- df_text_preprocessing %>%
+  mutate(adoption_year=ifelse(adoption_year %in% c("2016", "2017", "2018", "2019"),
+                              "2016-2019", "2015 and earlier"))
+
+# vulnerable_population preprocessing
+df_text_preprocessing <- df_text_preprocessing %>%
+  mutate(vulnerable_population = vulnerable_population %>% replace_na("No"))
+
+# author preprocessing
+df_text_preprocessing <- df_text_preprocessing %>%
+  mutate(author=ifelse(author %in% c("Consultant", "Other", "International organization"),
+                       "Internal", "External"))
+
+# Create Corpus and Document term matrix
+corpus_q2_0b <- corpus(df_text_preprocessing$lemma,
+                       docvars=df_text_preprocessing %>% dplyr::select(-c(lemma)))
+dfm_q2_0b <- tokens(corpus_q2_0b) %>%
+  tokens_ngrams(n = c(1, 2, 3)) %>%
+  dfm() %>%
+  dfm_trim(min_termfreq = 20)
+ncol(dfm_q2_0b)
+nrow(dfm_q2_0b)
+
+
+table(dfm_q2_0b$adoption_year, dfm_q2_0b$author)
+
+# Model 1: By Adoption Year
+tstat_key.1 <- textstat_keyness(dfm_q2_0b, 
+                                target = dfm_q2_0b$adoption_year=="2016-2019")
+textplot_keyness(tstat_key.1)
+
+# Model 2: By Vunerable Population
+# tstat_key.2 <- textstat_keyness(dfm_q2_0b, 
+#                                 target = dfm_q2_0b$vulnerable_population=="No")
+# textplot_keyness(tstat_key.2)
+
+# Model 3: By Author
+tstat_key.3 <- textstat_keyness(dfm_q2_0b, 
+                                target = dfm_q2_0b$author=="Internal")
+textplot_keyness(tstat_key.3)
+
+
+### --- NAMED ENTITIES  ------------------------------------------------------------
+
+setwd("C:/Users/Artem/YandexDisk/CDP/data/nlp_files")
+annotation <- readRDS("annotation_q2_0b_2019_2020")
+
+df_entity <- annotation$entity
+t1 <- as.data.frame(table(df_entity$entity_type))
+t2 <- as.data.frame(table(df_entity %>% filter(entity_type=="LOC") %>% dplyr::select(entity)))
+t3 <- as.data.frame(table(df_entity %>% filter(entity_type=="ORG") %>% dplyr::select(entity)))
+
+
+### --- STM with CITIES as observations  ------------------------------------------------------------
+
+# Model 1. Base + Categorical variables, K = 10
+K <- 10
+stm_model.1 <- stm(documents = dfm_q2_0b,
+                   prevalence =~ vulnerable_population + adoption_year + author,
+                   K = K, max.em.its = 50, init.type = "Spectral")
+labelTopics(stm_model.1)
+plot(stm_model.1, type = "summary", n = 5, xlim = c(0,1))
+mod.out.corr <- topicCorr(stm_model.1)
+plot(mod.out.corr)
+
+# Model 1. Base + Categorical variables, K = 20
+K <- 20
+stm_model.1 <- stm(documents = dfm_q2_0b,
+                   prevalence =~ vulnerable_population + adoption_year + author,
+                   K = K, max.em.its = 50, init.type = "Spectral")
+labelTopics(stm_model.1)
+
+# Model 1. Base + Categorical variables, K = 0
+stm_model.1 <- stm(documents = dfm_q2_0b,
+                   prevalence =~ vulnerable_population + adoption_year + author,
+                   K = 0, max.em.its = 50, init.type = "Spectral")
+labelTopics(stm_model.1)
+K <- 73
+# Estimate the effect of adoption_year on topics
+prep.1 <- estimateEffect(1:K ~ adoption_year, stm_model.1,
+                         uncertainty = "Global",
+                         meta = dfm_q2_0b@docvars)
+summary(prep.1, topics=c(1:2))
+plot(prep.1, covariate = "adoption_year", topics = c(1:K),
+     model = stm_model.1, method = "difference",
+     cov.value1 = "2016-2019", cov.value2 = "2015 and earlier",
+     xlab = "2015 and earlier < ................... > 2016-2019",
+     main = "Topics for Based on the years",
+     xlim = c(-.3, .3),
+     labeltype = "custom")
+
+# Estimate the effect of author on topics
+prep.2 <- estimateEffect(1:K ~ author, stm_model.1,
+                         uncertainty = "Global",
+                         meta = dfm_q2_0b@docvars)
+summary(prep.2, topics=c(1:K))
+plot(prep.2, covariate = "author", topics = c(1:K),
+     model = stm_model.1, method = "difference",
+     cov.value1 = "Internal", cov.value2 = "External",
+     xlab = "External < ................... > Internal",
+     main = "Topics Based on the Author",
+     xlim = c(-.1, .1),
+     labeltype = "custom")
+
+
+labelTopics(stm_model.1, topics = c(14, 9, 3)) # 2018-2019
+labelTopics(stm_model.1, topics = c(17)) # 2015 and earlier
 
 
 
@@ -1118,7 +1513,7 @@ stopwords_vec <- stopwords::stopwords(language = "en",source = "smart")
 stopwords_vec <- c(stopwords_vec, "e.g.", "la")
 df_text_preprocessing <- annotation$token %>%
   filter(!(lemma %in% stopwords_vec),
-         !(upos %in% c("DET", "PUNCT")),
+         !(upos %in% c("DET", "PUNCT", "PROPN")),
          (grepl("^[A-Za-z]+$", lemma, perl = T))) %>%
   dplyr::select(doc_id, lemma) %>%
   group_by(doc_id) %>%
@@ -1129,17 +1524,18 @@ df_corp_city_text <- df_corp_city_text %>% right_join(df_text_preprocessing)
 corpus_corp_city <- corpus(df_corp_city_text$lemma,
                            docvars=df_corp_city_text %>% dplyr::select(type))
 dfmat_corp_city <- tokens(corpus_corp_city) %>%
-  tokens_ngrams(n = c(1)) %>%
+  tokens_ngrams(n = c(1, 2)) %>%
   dfm() %>%
-  dfm_trim(min_termfreq = 10)
+  dfm_trim(min_termfreq = 20)
 ncol(dfmat_corp_city)
 nrow(dfmat_corp_city)
+
 # Remove documents without vocabulary
 dfmat_corp_city <- dfmat_corp_city[rowSums(dfmat_corp_city) != 0,]
 nrow(dfmat_corp_city)
 
-### STM
 
+### STM
 # ~~ Model 1, K=10
 stm_model.1 <- stm(documents = dfmat_corp_city,
                    prevalence =~ type,
@@ -1167,38 +1563,107 @@ plot(stm_model.1, type = "perspectives", topics = c(1,5))
 mod.out.corr <- topicCorr(stm_model.1)
 plot(mod.out.corr)
 
-# ~~ Model 2, Search for K
+# ~~ Model 2, Search for K, K=72
 stm_model.2 <- stm(documents = dfmat_corp_city,
                    prevalence =~ type,
                    data = dfmat_corp_city@docvars,
                    K = 0, max.em.its = 75, init.type = "Spectral")
 labelTopics(stm_model.2)
+K <- 72
+
+# ~~ Model 2, K=20
+K <- 20
+stm_model.2 <- stm(documents = dfmat_corp_city,
+                   prevalence =~ type,
+                   data = dfmat_corp_city@docvars,
+                   K = K, max.em.its = 75, init.type = "Spectral")
+labelTopics(stm_model.2)
 plot(stm_model.2, type = "summary", xlim = c(0, .3))
 
-prep.2 <- estimateEffect(1:70 ~ type, stm_model.2,
+prep.2 <- estimateEffect(1:K ~ type, stm_model.2,
                        uncertainty = "Global",
                        meta = dfmat_corp_city@docvars)
-summary(prep.2, topics=c(1:70))
+summary(prep.2, topics=c(1:K))
 
-plot(prep.2, covariate = "type", topics = c(1:70),
+plot(prep.2, covariate = "type", topics = c(1:K),
      model = stm_model.2, method = "difference",
      cov.value1 = "corporation", cov.value2 = "city",
-     xlab = "City < ................... > Corporation",
+     xlab = "Corporation < ................... > City",
      main = "Topics for Corporations and Cities",
-     xlim = c(-.1, .1),
+     xlim = c(-.2, .2),
      labeltype = "custom")
-labelTopics(stm_model.2, topics = c(70, 59, 41, 32, 14, 1))
+labelTopics(stm_model.2, topics = c(7, 11))
+labelTopics(stm_model.2, topics = c(14, 20))
+labelTopics(stm_model.2, topics = c(18, 16, 9, 3))
 
-plot(stm_model.1, type = "perspectives", topics = c(1,5))
+# ~~ Model 2, K=15
+K <- 15
+stm_model.2 <- stm(documents = dfmat_corp_city,
+                   prevalence =~ type,
+                   data = dfmat_corp_city@docvars,
+                   K = K, max.em.its = 75, init.type = "Spectral")
+labelTopics(stm_model.2)
+plot(stm_model.2, type = "summary", xlim = c(0, .3))
+prep.2 <- estimateEffect(1:K ~ type, stm_model.2,
+                         uncertainty = "Global",
+                         meta = dfmat_corp_city@docvars)
+summary(prep.2, topics=c(1:K))
+
+plot(prep.2, covariate = "type", topics = c(1:K),
+     model = stm_model.2, method = "difference",
+     cov.value1 = "corporation", cov.value2 = "city",
+     xlab = "Corporation < ................... > City",
+     main = "Topics for Corporations and Cities",
+     xlim = c(-.2, .2),
+     labeltype = "custom")
+labelTopics(stm_model.2, topics = c(14, 20))
+labelTopics(stm_model.2, topics = c(7, 11))
+
+
+# ~~ Model 2, K=10
+K <- 10
+stm_model.2 <- stm(documents = dfmat_corp_city,
+                   prevalence =~ type,
+                   data = dfmat_corp_city@docvars,
+                   K = K, max.em.its = 75, init.type = "Spectral")
+labelTopics(stm_model.2)
+plot(stm_model.2, type = "summary", xlim = c(0, .3))
+prep.2 <- estimateEffect(1:K ~ type, stm_model.2,
+                         uncertainty = "Global",
+                         meta = dfmat_corp_city@docvars)
+summary(prep.2, topics=c(1:K))
+
+plot(prep.2, covariate = "type", topics = c(1:K),
+     model = stm_model.2, method = "difference",
+     cov.value1 = "corporation", cov.value2 = "city",
+     xlab = "Corporation < ................... > City",
+     main = "Topics for Corporations and Cities",
+     xlim = c(-.5, .5),
+     labeltype = "custom")
+labelTopics(stm_model.2, topics = c(10, 2))
+labelTopics(stm_model.2, topics = c(6, 4))
+
+
+
+
 
 # Correlation between topics
 mod.out.corr <- topicCorr(stm_model.2)
 plot(mod.out.corr)
 
 
+# --- Searching for K
+processed <- textProcessor(df_corp_city_text$lemma, metadata = df_corp_city_text,
+                           stem = F, removestopwords = F)
+out <- prepDocuments(processed$documents, processed$vocab, processed$meta,
+                     lower.thresh=10)
+storage <- searchK(out$documents, out$vocab, K = c(10, 12, 14, 16, 20, 30),
+                   prevalence =~ type, data = out$meta)
+plot(storage)
+
+
 ################################## TODO ##############################################
 
-# 1. Hazards --> Actions --> Co-benefits. What are the benefits for each Hazard?
 # 2. Add Mitigation Actions (Question 5.4)
 # 3. Ivestigate questions with large number of rows   
 # 4. Connect Add C2.4
