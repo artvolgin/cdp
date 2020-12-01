@@ -802,7 +802,7 @@ stm_model.1 <- stm(documents = dfm_q2_0b,
                    prevalence =~ adoption_year,
                    K = K, max.em.its = 75, init.type = "Spectral")
 setwd("C:/Users/Artem/YandexDisk/CDP/data/nlp_files")
-saveRDS(stm_model.1, "stm_model_pages_20")
+# saveRDS(stm_model.1, "stm_model_pages_20")
 stm_model.1 <- readRDS("stm_model_pages_20")
 
 
@@ -813,13 +813,13 @@ prep.1 <- estimateEffect(1:K ~ adoption_year, stm_model.1,
 summary(prep.1, topics=c(1:K))
 plot(prep.1, covariate = "adoption_year", topics = c(1:K),
      model = stm_model.1, method = "difference",
-     cov.value1 = "2016-2019", cov.value2 = "2015 and earlier",
-     xlab = "2015 and earlier < ................... > 2018-2019",
+     cov.value1 = "2015 and earlier", cov.value2 ="2016-2019",
+     xlab = "2015 and earlier < ................... > 2016-2019",
      main = "Topics for Based on the years",
      xlim = c(-.05, .05),
      labeltype = "custom")
-labelTopics(stm_model.1, topics = c(46, 43, 13)) # 2016-2019
-labelTopics(stm_model.1, topics = c(23)) # 2015 and earlier
+# labelTopics(stm_model.1, topics = c(46, 43, 13)) # 2016-2019
+# labelTopics(stm_model.1, topics = c(23)) # 2015 and earlier
 
 # Extract topic labels
 df_topiclabels <- data.frame(labelTopics(stm_model.1, n = 5)$frex)
@@ -932,7 +932,7 @@ df_effects <- df_effects %>% left_join(df_topiclabels)
 
 # Save for plotting
 setwd("C:/Users/Artem/YandexDisk/CDP/data/for_plots")
-saveRDS(df_effects, "df_effects_reports")
+saveRDS(df_effects, "df_effects_reports.rds")
 
 # Plot
 ggplot(df_effects, aes(x = reorder(topic_label, difference),
@@ -1013,7 +1013,6 @@ nrow(dfm_q2_0b)
 # Save to RDS
 setwd("C:/Users/Artem/YandexDisk/CDP/data/for_plots")
 saveRDS(dfm_q2_0b, "dfm_q2_0b")
-
 
 textplot_wordcloud(dfm_q2_0b)
 
