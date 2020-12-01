@@ -1,0 +1,135 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+# Basic
+library(rio)
+library(foreign)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(stringi)  
+library(utf8)
+# Network
+library(igraph)
+library(tnet)
+# NLP
+library(quanteda)
+library(quanteda.textmodels)
+library(glmnet)
+library(caret)
+library(translateR)
+library(cleanNLP)
+library(reticulate)
+library(stopwords)
+require(seededlda)
+require(lubridate)
+library(pdftools)
+library(tm)
+library(cld3)
+library(stm)
+# Other
+library(arules)
+library(arulesViz)
+library(reshape2)
+library(quantmod)
+# Network
+library(igraph)
+library(tnet)
+library(arules)
+library(arulesViz)
+library(reshape2)
+library(quantmod)
+library(visNetwork)
+
+```
+
+
+
+# NLP: Cooperation between between cities and corporations
+
+```{r}
+# Data loading
+setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/for_plots'))
+stm_model.2 <- readRDS("stm_model.2")
+df_effects <- readRDS("df_effects")
+df_topiclabels <- readRDS("df_topiclabels")
+nodes <- readRDS("nodes")
+ig_df <- readRDS("ig_df")
+
+```
+
+
+```{r fig.height=10, fig.width=15}
+# Plot topic proportions
+ggplot(df_topiclabels, aes(x = reorder(topic_label, topic_prop), y = topic_prop)) + 
+  geom_bar(stat = "identity") + 
+  coord_flip() + theme_minimal() +
+  scale_y_continuous(breaks = c(0, 0.3), limits = c(0, 0.3), expand = c(0, 0)) + #change breaks and limits as you need
+  coord_flip() + 
+  geom_text(aes(label = scales::percent(topic_prop, 2)), #Scale in percent
+            hjust = -0.25, size = 4,
+            position = position_dodge(width = 1),
+            inherit.aes = TRUE) + 
+  theme(panel.border = element_blank())
+```
+
+
+
+```{r fig.height=10, fig.width=15}
+# Plot
+ggplot(df_effects, aes(x = reorder(topic_label, difference),
+                    y = difference)) + 
+  
+  geom_point(data=df_effects, size=2) +
+  ylim(-0.4, 0.4) + 
+  geom_errorbar(aes(ymin = lower, ymax = upper),  width=0.25) + 
+  
+  labs(x = "",
+       y = "Corporation < ................... > City") + 
+  geom_hline(aes(yintercept=0), 
+             linetype="dashed", color = "gray40") +
+  coord_flip() + theme_minimal() +
+  theme(axis.title=element_text(size=16),
+        legend.text=element_text(size=16),
+        # legend.position = c(0.9, 0.1),
+        legend.title=element_text(size=16),
+        text = element_text(size=16))
+```
+
+
+```{r}
+stm::cloud(stm_model.2, topic = 18, scale = c(2,.5))
+stm::cloud(stm_model.2, topic = 16, scale = c(2,.5))
+stm::cloud(stm_model.2, topic = 3, scale = c(2,.5))
+```
+
+
+
+
+# Network: Hazards, Actions, Benifits
+
+
+```{r}
+
+# VisNetwork
+visNetwork(
+  nodes,
+  edges = ig_df$edges
+) %>%
+  visEdges(arrows = "to") %>%
+  # visNodes(color = node_colors) %>%
+  visOptions( highlightNearest = T)
+
+
+```
+
+
+
+
+
+
