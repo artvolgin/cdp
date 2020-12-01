@@ -16,7 +16,7 @@ library(stringi)
 library(utf8)
 # Network
 library(igraph)
-library(tnet)
+#library(tnet)
 # NLP
 library(quanteda)
 library(quanteda.textmodels)

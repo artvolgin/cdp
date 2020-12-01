@@ -9,11 +9,35 @@ $$ \frac{virtual \space output}{virtual \space input} = \frac{u_oy_{1o} + ... + 
 
 where s is the amount of outputs, m is the amount of inputs, (u,v) are the weights  assigned to different inputs and outputs, $y_{jo}$ is the jth output of DMU observed $(j = 1, ..., s)$, $x_{io}$ is the ith input of DMU observed $(i = 1, ..., m)$.
 
+
+METRICS FOR RULES
+
+Let $X, Y$ be sets of items (e.g., certain hazards), $X \Rightarrow Y$ an association rule, $T$ a set of paths (e.g., hazard - action - co-benefit).
+
+1. Support
+
+Support indicator reflects the frequency of item's appearance in the database
+
+$$ \mathrm{supp}(X) = \frac{|\{t \in T; X \subseteq t\}|}{|T|}  $$
+2. Confindence
+
+Confidence indicator points on how frequent a rule has been established to be true.
+
+
+$$ {conf}(X \Rightarrow Y) = \mathrm{supp}(X \cup Y) / \mathrm{supp}(X) $$
+3. Lift
+
+Lift indicator potrays the ratio of the observed support to the expected support under the independence of $X$ and $Y$.
+
+$$ \mathrm{lift}(X\Rightarrow Y) = \frac{ \mathrm{supp}(X \cup Y)}{ \mathrm{supp}(X) \times \mathrm{supp}(Y) } $$
+
+
 Data and packages loading
 
 ```{r}
 library(pheatmap)
 library(igraph)
+library(kableExtra)
 
 setwd('C:/GitHub/cdp')
 cities20_KPIs <- readRDS('cities20_KPIs.rds')
