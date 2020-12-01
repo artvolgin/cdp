@@ -1,0 +1,391 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+A linear prgramming maximizes the following ratio:
+
+$$ \frac{virtual \space output}{virtual \space input} = \frac{u_oy_{1o} + ... + u_sy_{so}}{v_ox_{1o} + ... + v_mx_{mo}} $$
+
+where s is the amount of outputs, m is the amount of inputs, (u,v) are the weights  assigned to different inputs and outputs, $y_{jo}$ is the jth output of DMU observed $(j = 1, ..., s)$, $x_{io}$ is the ith input of DMU observed $(i = 1, ..., m)$.
+
+
+METRICS FOR RULES
+
+Let $X, Y$ be sets of items (e.g., certain hazards), $X \Rightarrow Y$ an association rule, $T$ a set of paths (e.g., hazard - action - co-benefit).
+
+1. Support
+
+Support indicator reflects the frequency of item's appearance in the database
+
+$$ \mathrm{supp}(X) = \frac{|\{t \in T; X \subseteq t\}|}{|T|}  $$
+2. Confindence
+
+Confidence indicator points on how frequent a rule has been established to be true.
+
+
+$$ {conf}(X \Rightarrow Y) = \mathrm{supp}(X \cup Y) / \mathrm{supp}(X) $$
+3. Lift
+
+Lift indicator potrays the ratio of the observed support to the expected support under the independence of $X$ and $Y$.
+
+$$ \mathrm{lift}(X\Rightarrow Y) = \frac{ \mathrm{supp}(X \cup Y)}{ \mathrm{supp}(X) \times \mathrm{supp}(Y) } $$
+
+
+Data and packages loading
+
+```{r}
+library(pheatmap)
+library(igraph)
+library(kableExtra)
+
+setwd('C:/GitHub/cdp')
+cities20_KPIs <- readRDS('cities20_KPIs.rds')
+cities19_KPIs <- readRDS('cities19_KPIs.rds')
+
+mean(cities20_KPIs$KPI_total)
+mean(cities19_KPIs$KPI_total)
+
+t.test(cities20_KPIs$KPI_total, cities19_KPIs$KPI_total)
+```
+
+1. KPI table
+
+```{r}
+# KPI description
+KPIs_description <- rio::import('KPIs_Description.xlsx')
+KPIs_description[is.na(KPIs_description)] <- ''
+kbl(KPIs_description, align = "l") %>%
+  kable_paper(full_width = F) %>%
+  column_spec(1, bold = T)  %>%
+  scroll_box(width = "100%", height = "400px")
+```
+
+2. Probability Density Functions for 2019 2020
+
+```{r}
+####################################################### Reliability #######################################################
+###### Correlation
+
+# 2020
+#cor.test(cities20_KPIs$KPI_total, cities20_KPIs$gdp_per_capita)
+KPI_top <- cities20_KPIs %>% arrange(desc(KPI_total))
+
+#plot(cities20_KPIs$KPI_total, cities20_KPIs$gdp_per_capita)
+cities20_KPIs <- cities20_KPIs %>% filter(!id == 31090)
+
+# 2020
+#cor.test(cities19_KPIs$KPI_total, cities19_KPIs$gdp_per_capita)
+KPI_top <- cities19_KPIs %>% arrange(desc(KPI_total))
+
+#plot(cities19_KPIs$KPI_total, cities19_KPIs$gdp_per_capital)
+cities19_KPIs <- cities19_KPIs %>% filter(!id == 31090)
+
+###### Densities
+
+# Combining data for 2019 and 2020
+# Joint dataset
+cities20_KPIs_year <- cbind.data.frame(year = 2020, cities20_KPIs)
+cities19_KPIs_year <- cbind.data.frame(year = 2019, cities19_KPIs)
+cities19_20_KPIs_year <- rbind.data.frame(cities20_KPIs_year,
+                                          cities19_KPIs_year) %>% arrange(year)
+# Graphing
+cities19_20_KPIs_year %>%
+  ggplot(aes(x = KPI_total, fill = factor(year))) +
+  geom_histogram(bins = 10) + 
+  labs(x = "Total KPI Scores",
+       title = "The Probability Density Functions, 2019 and 2020")
+
+##### Difference in total KPI
+cities19_20_KPIs <- cities20_KPIs[,c('org', 'KPI_total')] %>%
+  left_join(cities19_KPIs[,c('org', 'KPI_total')], by = 'org') %>%
+  mutate(diff_KPI = KPI_total.x - KPI_total.y) %>%
+  arrange(desc(diff_KPI))
+colnames(cities19_20_KPIs) <- c('City', "Total KPI 2020", 'Total KPI 2019', 'Difference')
+
+# Selecting top 20
+cities19_20_KPIs_top20 <- cities19_20_KPIs %>% slice(1:20)
+```
+
+3.  Table + Heatmap with 2019-2020 difference
+
+```{r}
+# Heatmap
+cities19_20_KPIs_top20[,1:4] %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = "striped", font_size = 12) %>%
+  kable_paper(full_width = F) %>%
+  column_spec(4, color = "white",
+              background = spec_color(cities19_20_KPIs_top20$Difference, end = 0.7),
+              popover = paste("am:", cities19_20_KPIs_top20$Difference))
+```
+
+4. Scatter/bubble - Total KPI and cities attributes
+
+```{r}
+# Total KPI and cities attributes
+ggplot(cities20_KPIs, aes(x=gdp_per_capita, y=KPI_total)) + 
+  geom_point(aes(size=population, color = mean_temp)) +
+  geom_smooth(method = lm, se = F)
+```
+
+5. Distributions in DEA
+
+```{r}
+#################################### Data Envelopment Analysis #############################
+
+##### 2020
+
+# Read data
+cities20_dear <- read_data(datadea = cities20_KPIs,
+                           dmus = 2,
+                           inputs = c('gdp_per_capita', 'population', 'mean_temp'),
+                           outputs = c("Risk_Assessment", "Adaptation_Plan",        
+                                       "Adaptation_Actions", "Mitigation_Actions",     
+                                       "Mitigation_Plan", "Opportunities",          
+                                       "Renewable_Energy_Target", "Additional_Measures",    
+                                       "Water", "Social_Equity"),
+                           nc_inputs = 2:3)
+
+# Run a basic model accounting for uncontrollable inputs
+deaR_model_20 <- model_basic(cities20_dear, orientation = 'oo', rts = 'vrs')
+#deaR_boot <- bootstrap_basic(cities20_dear, orientation = 'oo', rts = 'vrs')
+
+##### Graphing
+
+# Barplot of efficient vs. non-efficient
+eff_20 <- data.frame(org = deaR_model_20$data$dmunames, eff_20 = 1/efficiencies(deaR_model_20))
+eff_20 %>% mutate(iseff = ifelse(eff_20 == 1, 1 , 0)) -> eff_20
+eff_20 <- eff_20 %>% left_join(cities20_KPIs[, c('org', 'gdp_per_capita')], by = 'org')
+eff_20$gdp_group <- ifelse(eff_20$gdp_per_capita >= mean(eff_20$gdp_per_capita), 1, 0)
+
+p1 <- eff_20  %>% 
+  ggplot(aes(x = factor(iseff))) + 
+  geom_bar(stat="count", width=0.7) +
+  ylab("Count") + xlab("") + 
+  scale_x_discrete(labels = c("Non-efficient", "Efficient")) +
+  ggtitle("Efficient / Non-Efficient DMUs") + 
+  geom_text(stat = 'count', aes(label = ..count..), vjust = -0.5)
+
+p2 <- eff_20 %>% filter(iseff == 0) %>% arrange(desc(eff_20)) %>%
+  ggplot(aes(x = eff_20)) + geom_histogram(breaks = c(seq(
+                 from = min(eff_20$eff_20),
+                 to = max(eff_20$eff_20[eff_20$iseff != 1]),
+                 length.out = 10 ))) + scale_fill_identity()+
+  ggtitle("Distribution of Non-Efficient DMUs") +
+  ylab("Count") + xlab('Efficiency Score for Non-Efficient') 
+
+ ggarrange(p1, p2, ncol = 2, nrow = 1)
+```
+
+6. Heatmap for slacks
+
+```{r fig.height=10, fig.width=10}
+# Slacks: heatmap by gdp
+# Preparing data
+slacks_20 <- as.data.frame(slacks(deaR_model_20))
+slacks_20$org <- rownames(slacks_20)
+slacks_eff_20 <- slacks_20 %>% select(4:ncol(slacks_20)) %>% 
+  left_join(eff_20, by = 'org')
+colnames(slacks_eff_20) <- c("Risk_Assessment", "Adaptation_Plan",        
+                          "Adaptation_Actions", "Mitigation_Actions",     
+                          "Mitigation_Plan", "Opportunities",          
+                          "Renewable_Energy_Target", "Additional_Measures",    
+                          "Water", "Social_Equity",'org',
+                          'eff_20', 'iseff', 'gdp_per_capita', 'gdp_group')
+rownames(slacks_eff_20) <- slacks_eff_20$org
+
+# Full high gdp
+slacks_eff_high_gdp <- slacks_eff_20 %>% filter(iseff == 0 & gdp_group == 1) %>%
+  arrange(eff_20) %>%
+  select(-c(org, eff_20, iseff, gdp_per_capita, gdp_group))
+slacks_eff_high_gdp <- as.matrix(slacks_eff_high_gdp)
+
+# Full low gdp
+slacks_eff_low_gdp <- slacks_eff_20 %>% filter(iseff == 0 & gdp_group == 0) %>%
+  arrange(eff_20) %>%
+  select(-c(org, eff_20, iseff, gdp_per_capita, gdp_group))
+slacks_eff_low_gdp <- as.matrix(slacks_eff_low_gdp)
+
+# Plotting
+
+pheatmap(slacks_eff_high_gdp, cluster_rows=T, cluster_cols=F, angle_col = "45",
+color = colorRampPalette(c("chartreuse3", "white",  "brown2"))(100),
+border_color="white", display_numbers=T, legend=F, fontsize = 11)
+
+pheatmap(slacks_eff_low_gdp, cluster_rows=T, cluster_cols=F, angle_col = "45",
+color = colorRampPalette(c("chartreuse3", "white",  "brown2"))(100),
+border_color="white", display_numbers=T, legend=F, fontsize = 11)
+```
+
+
+7. Efficiency over Time for high and low gdp
+
+```{r fig.height=10, fig.width=10}
+##### 2019
+
+# Read data
+cities19_dear <- read_data(datadea = cities19_KPIs,
+                           dmus = 2,
+                           inputs = c('gdp_per_capita', 'population', 'mean_temp'),
+                           outputs = c("Risk_Assessment", "Adaptation_Plan",        
+                                       "Adaptation_Actions", "Mitigation_Actions",     
+                                       "Mitigation_Plan", "Opportunities",          
+                                       "Renewable_Energy_Target", "Additional_Measures",    
+                                       "Water", "Social_Equity"),
+                           nc_inputs = 2:3)
+
+# Run a basic model accounting for uncontrollable inputs
+deaR_model_19 <- model_basic(cities19_dear, orientation = 'oo', rts = 'vrs')
+
+##### Malmquist index
+
+# Specifying read_data for the index
+data_malmquist <- read_malmquist(datadea = cities19_20_KPIs_year,
+                               percol = 'year',
+                               arrangement = "vertical",
+                               dmus = 3,
+                               inputs = c('gdp_per_capita', 'population', 'mean_temp'),
+                               outputs = c("Risk_Assessment", "Adaptation_Plan",        
+                                           "Adaptation_Actions", "Mitigation_Actions",     
+                                           "Mitigation_Plan", "Opportunities",          
+                                           "Renewable_Energy_Target", "Additional_Measures",    
+                                           "Water", "Social_Equity"),
+                               nc_inputs = 2:3)
+
+malmquist <- malmquist_index(data_malmquist, orientation = "oo", rts = 'vrs')
+mi <- data.frame(t(malmquist$mi))
+colnames(mi) <- 'MI'
+tc <- as.data.frame(t(malmquist$tc))
+colnames(tc) <- 'TC'
+pech <- as.data.frame(t(malmquist$pech))
+colnames(pech) <- 'PTEC'
+
+# Malmquist output 
+
+# Extracting efficiencies for 2019
+eff_19 <- as.data.frame(100*1/efficiencies(deaR_model_19))
+eff_19$org <- rownames(eff_19)
+rownames(eff_19) <- NULL
+colnames(eff_19) <- c('eff_19', 'org')
+
+# Multiplying efficiencies for 2020 by 100
+eff_20$eff_20_normed <- 100*eff_20$eff_20
+
+# Combining all pieces of the output
+Malmquist_output <- cbind.data.frame(mi, tc, pech) 
+Malmquist_output$org <-  rownames(Malmquist_output)
+Malmquist_output <- Malmquist_output[, c(4,1:3)]
+rownames(Malmquist_output) <- NULL
+Malmquist_output <- Malmquist_output %>%
+  left_join(eff_20, by = 'org') %>%
+  left_join(eff_19, by = 'org') %>% arrange(desc(gdp_per_capita, gdp_group)) %>%
+  na.omit(Malmquist_output)
+
+# Selecting relevant columns
+Malmquist_output <- Malmquist_output[,c('org', 'MI', 'TC',
+                                        'PTEC', 'eff_19',
+                                        'eff_20_normed', 'gdp_group')]
+colnames(Malmquist_output) <- c('Cities', 'MI', 'TC', 'PTEC',
+                                'Efficiency 2019', 'Efficiency 2020', 'gdp_group')
+
+# Sampling 20 cities for demonstration purposes
+set.seed(123)
+sample_id <- sample(Malmquist_output$Cities, 20)
+Malmquist_output_20 <- Malmquist_output[Malmquist_output$Cities %in% sample_id,]
+Malmquist_output_20 <- Malmquist_output_20  %>%
+  select(-gdp_group) %>% arrange(desc(`Efficiency 2019`))
+Malmquist_output_20[,2:6] <- round(Malmquist_output_20[,2:6], 2)
+Malmquist_output <- Malmquist_output[!is.infinite(Malmquist_output$MI),]
+Malmquist_output$gdp_group <- NULL
+# Adding average by whole sample
+Averages <- Malmquist_output %>% summarise_if(is.numeric, mean)
+Malmquist_output_20 <- rbind.data.frame(Malmquist_output_20,
+                                        cbind.data.frame('Cities' = 'Total average',
+                                                         Averages))
+# Printing
+kable(Malmquist_output_20,
+  caption = 'Cities Efficiency over Time',
+  booktabs = TRUE, "html", align = 'lccccc') %>%
+  kable_styling("striped", full_width = F)
+```
+
+
+8. Network with peers
+
+
+```{r fig.height=10, fig.width=10}
+# References: peers
+library(igraph)
+
+# Extracting lambdas
+lmbd <- lambdas(deaR_model_20)
+lmbd <- matrix(lmbd[complete.cases(lmbd), ], ncol = ncol(lmbd), dimnames = dimnames(lmbd))
+
+# Make the matrix square in case dmu_eval != dmu_ref
+dmunames <- deaR_model_20$data$dmunames[deaR_model_20$dmu_eval]
+ref <- references(deaR_model_20)
+refnames <- refnames <- unique(unlist(lapply(ref, function (x) names(x))))
+urefnames <- names(ref)
+effdmus <- dmunames[which(!dmunames %in% urefnames)]
+urefnames <- refnames[refnames %in% effdmus]
+allnames <- unique(unlist(dimnames(lmbd)))
+
+# An empty matrix for adjacency
+extendedlmbd <- matrix(0,
+                       nrow = length(allnames),
+                       ncol = length(allnames),
+                       dimnames = list(allnames, allnames))
+extendedlmbd[dimnames(lmbd)[[1]],dimnames(lmbd)[[2]]] <- lmbd
+
+# Creating adjacency matrix
+adjmatrix <- extendedlmbd 
+G <- graph_from_adjacency_matrix(adjmatrix, diag = FALSE, weighted = T, mode = 'directed')
+
+# Adding attributes
+gdp_per_capita_vector <- t(deaR_model_20$data$input)
+gdp_per_capita_vector <- gdp_per_capita_vector[,'gdp_per_capita']
+G <- set_vertex_attr(G, 'gdp_per_capita', value = gdp_per_capita_vector)
+
+# Adding weighted degree centrality as an attribute
+in_deg <- strength(G, mode = 'in', weights = get.edge.attribute(G)$weights)
+G <- set_vertex_attr(G, 'in_deg', value = in_deg)
+quantile(in_deg, probs = c(0.9, 0.95, 0.98))
+ 
+# Rem0ving efficient cities - isolated nodes
+Isolated = which(degree(G)==0)
+G2 = delete.vertices(G, Isolated)
+
+# Plotting
+par(mar=c(0,0,0,0))
+plot(G2,  arrow.size = 0.2,
+     edge.arrow.size = 0.3,
+     vertex.label = ifelse(get.vertex.attribute(G2)$in_deg>=3,
+                           get.vertex.attribute(G2)$name, NA),
+     vertex.size = ifelse(get.vertex.attribute(G2)$in_deg>=3,
+                           ((vertex_attr(G2 , 'in_deg')/4)+4), 2),
+     vertex.color = ifelse(get.vertex.attribute(G2)$gdp_per_capita >= mean(get.vertex.attribute(G2)$gdp_per_capita),
+                          'red', 'blue'), 
+     vertex.label.color = 'black', label.dist = 1)
+
+```
+
+9. Full table with peers
+
+```{r}
+# Full table with peers
+
+# Sorting by lambdas within each unit
+ref_sorted <- lapply(seq_along(ref), function(i) {data.frame('lambda' = ref[[i]]) %>%
+    arrange(desc(lambda))})
+
+# Extracting peers
+ref_dframe <- cbind.data.frame('Cities' = names(ref),
+                               'Peers' = unlist(lapply(seq_along(ref_sorted),
+                                                       function(i){paste0(rownames(ref_sorted[[i]]), collapse = ', ')})))
+
+# Plotting
+kbl(ref_dframe) %>%
+  kable_paper() %>%
+  scroll_box(width = "100%", height = "400px")
+```
