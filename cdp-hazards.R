@@ -260,11 +260,13 @@ rio::export(df_cities_info %>% data.frame() %>% dplyr::select(-geometry), "df_ci
 #   filter(qstn == "2.2a", coln %in% c(1, 2, 3, 4, 5, 6, 7, 8)) %>%
 #   dcast(id + rown ~ colname, value.var="resp")
 
-# TODO
 
 #############################################################################################################
 ############## Map of Hazards
 #############################################################################################################
+
+# TODO: Interactive map
+
 
 df_cities_info <- df_cities_info %>% st_as_sf(coords=c("lon", "lat"))
 st_crs(df_cities_info) <- 4326
@@ -276,7 +278,7 @@ tm_shape(world) +
   tm_polygons() + 
   tm_shape(df_cities_info) +
   tm_symbols(col = "mean_Index_Current_impact", border.col = "gray",
-             size = "hazards_n", alpha = 0.75, scale = 3, palette = rev(RColorBrewer::brewer.pal(3,"RdYlGn")))
+             size = "hazards_n", alpha = 0.75, scale = 2, palette = rev(RColorBrewer::brewer.pal(3,"RdYlGn")))
 
 ### US only
 df_cities_info.us <- df_cities_info %>% filter(cntry == "United States of America")
@@ -286,7 +288,7 @@ tm_shape(us_states) +
   tm_polygons() + 
   tm_shape(df_cities_info.us) +
   tm_symbols(col = "mean_Index_Current_impact", border.col = "gray",
-             size = "hazards_n", alpha = 0.75, scale = 3, palette = rev(RColorBrewer::brewer.pal(3,"RdYlGn")))
+             size = "hazards_n", alpha = 0.75, scale = 2, palette = rev(RColorBrewer::brewer.pal(3,"RdYlGn")))
 
 ### Europe
 worldMap <- getMap()
@@ -309,6 +311,7 @@ df_hazards.20.maximpact <- df_hazards.20 %>%
   left_join(df_hazards.20 %>% group_by(id) %>% summarise(max_Index_Current_impact = max(Index_Current_impact))) %>%
   filter(Index_Current_impact==max_Index_Current_impact) 
 df_hazards.20.maximpact <- df_hazards.20.maximpact %>% distinct(id, Climate_Hazards, .keep_all = TRUE)
+
 
 # 1. Flood and sea level rise
 flood_sea_hazards <- (df_hazards.20.maximpact %>% filter(Climate_Hazards == "Flood and sea level rise") %>% 
