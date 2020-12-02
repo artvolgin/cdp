@@ -428,20 +428,7 @@ for (hazard in table.hazards$Var1){
   
 }
 
-# Remove association rules with Benifits in LHS
-# for (benifit in table.benifits$Var1){
-#   
-#   association.rules <- subset(association.rules,  subset = (!lhs %pin% benifit))
-#   print(association.rules)
-#   
-# }
-
-# plot(association.rules,method="two-key plot")
-
 topSubRules <- head(association.rules, n = 50, by = c("confidence", "lift")) # OK
-# topSubRules <- head(association.rules, n = 50, by = c("confidence", "support")) # OK
-
-# plot(topSubRules, method = "graph",  engine = "htmlwidget")
 
 
 

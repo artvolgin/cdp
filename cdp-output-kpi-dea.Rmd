@@ -38,15 +38,39 @@ Data and packages loading
 library(pheatmap)
 library(igraph)
 library(kableExtra)
+library(dplyr)
+library(ggplot2)
+library(deaR)
+library(ggpubr)
+library(visNetwork)
 
-setwd('C:/GitHub/cdp')
+# setwd('C:/GitHub/cdp')
+setwd('C:/github/cdp')
 cities20_KPIs <- readRDS('cities20_KPIs.rds')
 cities19_KPIs <- readRDS('cities19_KPIs.rds')
 
-mean(cities20_KPIs$KPI_total)
-mean(cities19_KPIs$KPI_total)
+# mean(cities20_KPIs$KPI_total)
+# mean(cities19_KPIs$KPI_total)
 
-t.test(cities20_KPIs$KPI_total, cities19_KPIs$KPI_total)
+# t.test(cities20_KPIs$KPI_total, cities19_KPIs$KPI_total)
+
+# Data loading
+setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data/for_plots'))
+stm_model.2 <- readRDS("stm_model.2")
+df_effects <- readRDS("df_effects")
+df_topiclabels <- readRDS("df_topiclabels")
+nodes <- readRDS("nodes")
+ig_df <- readRDS("ig_df")
+# NLP reports
+dfm_q2_0b <- readRDS("dfm_q2_0b")
+readability_index <- readRDS("readability_index.rds")
+df_topiclabels_reports <- readRDS("df_topiclabels_reports.rds")
+df_effects_reports <- readRDS("df_effects_reports.rds")
+
+setwd(paste0("C:/Users/", Sys.getenv("USERNAME"), '/YandexDisk/CDP/data'))
+df_additional_info <- rio::import("df_cities_info.additional.xlsx")
+
+
 ```
 
 1. KPI table
@@ -63,7 +87,7 @@ kbl(KPIs_description, align = "l") %>%
 
 2. Probability Density Functions for 2019 2020
 
-```{r}
+```{r fig.height=5, fig.width=8}
 ####################################################### Reliability #######################################################
 ###### Correlation
 
@@ -89,13 +113,6 @@ cities20_KPIs_year <- cbind.data.frame(year = 2020, cities20_KPIs)
 cities19_KPIs_year <- cbind.data.frame(year = 2019, cities19_KPIs)
 cities19_20_KPIs_year <- rbind.data.frame(cities20_KPIs_year,
                                           cities19_KPIs_year) %>% arrange(year)
-# Graphing
-cities19_20_KPIs_year %>%
-  ggplot(aes(x = KPI_total, fill = factor(year))) +
-  geom_histogram(bins = 10) + 
-  labs(x = "Total KPI Scores",
-       title = "The Probability Density Functions, 2019 and 2020")
-
 ##### Difference in total KPI
 cities19_20_KPIs <- cities20_KPIs[,c('org', 'KPI_total')] %>%
   left_join(cities19_KPIs[,c('org', 'KPI_total')], by = 'org') %>%
@@ -105,13 +122,40 @@ colnames(cities19_20_KPIs) <- c('City', "Total KPI 2020", 'Total KPI 2019', 'Dif
 
 # Selecting top 20
 cities19_20_KPIs_top20 <- cities19_20_KPIs %>% slice(1:20)
+
+# Graphing
+mean_KPI_2019 <- cities19_20_KPIs_year %>% group_by(year) %>%
+  summarise(mean_KPI=mean(KPI_total)) %>% filter(year==2019)
+mean_KPI_2020 <- cities19_20_KPIs_year %>% group_by(year) %>%
+  summarise(mean_KPI=mean(KPI_total)) %>% filter(year==2020)
+
+cities19_20_KPIs_year %>%
+  ggplot(aes(x = KPI_total, fill = factor(year))) +
+  geom_density(alpha=.3) + 
+  labs(x = "Total KPI", y = "Density", fill="") + 
+  scale_fill_manual(values=c('darksalmon','deepskyblue2')) + 
+  ggtitle("KPI Distributions for 2019 and 2020") + 
+  geom_vline(aes(xintercept=mean(mean_KPI_2019$mean_KPI, na.rm=T)),   # Ignore NA values for mean
+               color="darksalmon", linetype="dashed", size=1) + 
+  geom_vline(aes(xintercept=mean(mean_KPI_2020$mean_KPI, na.rm=T)),   # Ignore NA values for mean
+               color="deepskyblue2", linetype="dashed", size=1) + 
+  theme_classic() +
+  theme(plot.title = element_text(size=18, face="bold", hjust=0.5),
+        legend.position="bottom") + 
+  annotate("text", label = "Mean KPI\n2019", x = 27.5, y = 0.01, size = 4, colour = "darksalmon") + 
+  annotate("text", label = "Mean KPI\n2020", x = 39, y = 0.01, size = 4, colour = "deepskyblue2")
+
+# TODO: Add mean values near the lines
+
+
+
 ```
 
 3.  Table + Heatmap with 2019-2020 difference
 
 ```{r}
 # Heatmap
-cities19_20_KPIs_top20[,1:4] %>%
+cities19_20_KPIs_top20[,c(1,3,2,4)] %>%
   kbl() %>%
   kable_styling(bootstrap_options = "striped", font_size = 12) %>%
   kable_paper(full_width = F) %>%
@@ -122,12 +166,27 @@ cities19_20_KPIs_top20[,1:4] %>%
 
 4. Scatter/bubble - Total KPI and cities attributes
 
-```{r}
+```{r fig.height=7, fig.width=8}
+options(scipen=10000)
 # Total KPI and cities attributes
-ggplot(cities20_KPIs, aes(x=gdp_per_capita, y=KPI_total)) + 
+cities20_KPIs_plot <- cities20_KPIs %>% dplyr::select(id, KPI_total)
+cities20_KPIs_plot <- cities20_KPIs_plot %>% left_join(df_additional_info) %>%
+  mutate(population=population/1e6)
+
+ggplot(cities20_KPIs_plot, aes(x=gdp_per_capita, y=KPI_total)) + 
   geom_point(aes(size=population, color = mean_temp)) +
-  geom_smooth(method = lm, se = F)
+  geom_smooth(method = lm, se = T, color = "darkgrey", size=0.5) +
+  scale_color_gradient(low="deepskyblue2", high="darksalmon") +
+  labs(x = "GDP per capita, $", y = "Total KPI",
+       size="Population (millions)", col="Mean Annual Temperature, °C") + 
+  ggtitle("Total KPI and GDP per capita") + 
+  theme_classic() +
+  theme(plot.title = element_text(size=18, face="bold", hjust=0.5),
+        legend.position="bottom")
+
+
 ```
+
 
 5. Distributions in DEA
 
@@ -217,6 +276,20 @@ pheatmap(slacks_eff_low_gdp, cluster_rows=T, cluster_cols=F, angle_col = "45",
 color = colorRampPalette(c("chartreuse3", "white",  "brown2"))(100),
 border_color="white", display_numbers=T, legend=F, fontsize = 11)
 ```
+
+```{r fig.height=10, fig.width=10}
+colnames(slacks_eff_high_gdp) <- gsub("_", " ", colnames(slacks_eff_high_gdp))
+colnames(slacks_eff_low_gdp) <- gsub("_", " ", colnames(slacks_eff_low_gdp))
+
+pheatmap(slacks_eff_high_gdp, cluster_rows=T, cluster_cols=F, angle_col = "45",
+color = colorRampPalette(c("chartreuse3", "white",  "brown2"))(100),
+border_color="white", display_numbers=F, legend=F, main="Slacks of cities with above average GDP")
+
+pheatmap(slacks_eff_low_gdp, cluster_rows=T, cluster_cols=F, angle_col = "45",
+color = colorRampPalette(c("chartreuse3", "white",  "brown2"))(100),
+border_color="white", display_numbers=F, legend=F)
+```
+
 
 
 7. Efficiency over Time for high and low gdp
@@ -356,19 +429,87 @@ quantile(in_deg, probs = c(0.9, 0.95, 0.98))
 Isolated = which(degree(G)==0)
 G2 = delete.vertices(G, Isolated)
 
-# Plotting
-par(mar=c(0,0,0,0))
-plot(G2,  arrow.size = 0.2,
-     edge.arrow.size = 0.3,
-     vertex.label = ifelse(get.vertex.attribute(G2)$in_deg>=3,
-                           get.vertex.attribute(G2)$name, NA),
-     vertex.size = ifelse(get.vertex.attribute(G2)$in_deg>=3,
-                           ((vertex_attr(G2 , 'in_deg')/4)+4), 2),
-     vertex.color = ifelse(get.vertex.attribute(G2)$gdp_per_capita >= mean(get.vertex.attribute(G2)$gdp_per_capita),
-                          'red', 'blue'), 
-     vertex.label.color = 'black', label.dist = 1)
 
 ```
+
+
+```{r fig.height=8, fig.width=8}
+
+set.seed(25)
+par(mar=c(0,0,0,0))
+
+# Set vertex size
+vertex_size = log(get.vertex.attribute(G2)$in_deg + 2)*3
+vertex_size <- ifelse(vertex_size<1.5, 1.5, vertex_size)
+
+# Set vertex color
+gdp <- get.vertex.attribute(G2)$gdp_per_capita
+in_degree <- get.vertex.attribute(G2)$in_deg
+vertex_color <- ifelse( (gdp >= mean(gdp) & in_degree>=3), 'deepskyblue2',
+                        ifelse((gdp >= mean(gdp) & in_degree<3), adjustcolor('deepskyblue2', alpha=0.5),
+                        ifelse((gdp < mean(gdp) & in_degree>=3), 'darksalmon',
+                        adjustcolor('darksalmon', alpha=0.5) )))
+
+# Set vertex label
+vertex_label <- get.vertex.attribute(G2)$name
+vertex_label_temp <- ifelse(in_degree>=3, vertex_label, NA)
+vertex_label <- dplyr::recode(vertex_label,
+                              "City of Boulder"="Boulder",
+                              "City of Greater Sudbury / Grand Sudbury"="Greater Sudbury",
+                              "Ayuntamiento de Hermosillo"="Hermosillo",
+                              "City of Bloomington"="Bloomington",
+                              "City Government of Davao"="Davao",
+                              "Alcaldia de Pereira"="Pereira",
+                              "Município de Guimarães"="Guimarães",
+                              "Município de Braga"="Braga",
+                              "Municipalidad de Providencia"="Providencia",
+                              "City of Encinitas, CA"="Encinitas",
+                              "Tagum City"="Tagum")
+vertex_label <- ifelse(in_degree>=3, vertex_label, NA)
+
+# Set vertex frame color
+vertex_frame_color <- ifelse(in_degree>=3, adjustcolor('black', alpha=0.5), "lightgrey")
+
+# Sed edge color
+edgelist <- data.frame(as_edgelist(G2))
+edge_color <- ifelse(edgelist$X2 %in% c(na.omit(unique(vertex_label_temp, na.rm=T))),
+                     adjustcolor('darkgrey', alpha=0.5), adjustcolor('lightgrey', alpha=0.3))
+
+# Set edge width
+edge_width <- E(G2)$weight
+
+# # Set vertex label color
+# vertex_label_color <- ifelse( (gdp >= mean(gdp) & in_degree>=3), 'midnightblue',
+#                         ifelse((gdp >= mean(gdp) & in_degree<3), NA,
+#                         ifelse((gdp < mean(gdp) & in_degree>=3), 'brown4',
+#                         NA )))
+
+set.seed(12)
+plot(G2,
+     edge.arrow.size = 0.3,
+     # layout=layout.lgl, # <<< OK
+     layout=layout.mds, # <<< OK2
+     vertex.label = vertex_label,
+     vertex.size = vertex_size,
+     vertex.color = vertex_color, 
+     # vertex.label.color = 'black',
+     vertex.label.color = "black",
+     vertex.label.font = 2,
+     vertex.label.family = "sans",
+     vertex.label.dist=0.75, vertex.label.degree=-pi/2, 
+     vertex.frame.color=vertex_frame_color,
+     # label.dist = 0,
+     # vertex.label.dist = 1,
+     # vertex.label.degree = 30,
+     # edge.color=edge_color,
+     edge.color=adjustcolor('lightgrey', alpha=0.5),
+     edge.width=edge_width*3,
+     edge.curved=T)
+
+
+```
+
+
 
 9. Full table with peers
 
